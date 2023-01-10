@@ -184,7 +184,9 @@ PetscErrorCode RDyCellsCreateFromDM(DM dm, RDyCells *cells) {
     PetscInt  dim = 2;
     PetscReal centroid[dim], normal[dim];
     PetscCall(DMPlexGetPointGlobal(dm, c, &gref, &junkInt));
+    printf("Calling DMPlexComputeCellGeometryFVM\n");
     DMPlexComputeCellGeometryFVM(dm, c, &cells->areas[icell], &centroid[0], &normal[0]);
+    exit(0);
 
     for (PetscInt idim = 0; idim < dim; idim++) {
       cells->centroids[icell].X[idim] = centroid[idim];
