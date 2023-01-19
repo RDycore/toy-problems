@@ -521,16 +521,20 @@ PetscErrorCode RDyEdgesCreateFromDM(DM dm, RDyEdges *edges) {
 
   PetscInt dim;
   PetscCall(DMGetCoordinateDim(dm, &dim));
+  printf("dim = %d\n",dim);
 
   for (PetscInt e = eStart; e < eEnd; e++) {
     PetscInt  iedge = e - eStart;
     PetscReal centroid[dim], normal[dim];
     DMPlexComputeCellGeometryFVM(dm, e, &edges->lengths[iedge], &centroid[0], &normal[0]);
+    if (iedge == 26) printf("length %f\n",edges->lengths[iedge]);
 
     for (PetscInt idim = 0; idim < dim; idim++) {
       edges->centroids[iedge].X[idim] = centroid[idim];
       edges->normals[iedge].V[idim]   = normal[idim];
+      if (iedge == 26) {printf("centroid[%d] = %f; normal = %+f\n",idim, centroid[idim], normal[idim]);}
     }
+    if (iedge == 26) exit(0);
 
     // edge-to-vertex
     PetscInt  pSize;
@@ -717,6 +721,7 @@ PetscErrorCode RDyComputeAdditionalEdgeAttributes(DM dm, RDyMesh *mesh) {
     } else {
       for (PetscInt idim = 0; idim < 2; idim++) {
         vec_L2RorEC.V[idim] = edges->centroids[iedge].X[idim] - cells->centroids[l].X[idim];
+        vec_L2RorEC.V[idim] = (vertices->points[vid_2].X[idim] + vertices->points[vid_1].X[idim])/2.0 - cells->centroids[l].X[idim];
       }
     }
     vec_L2RorEC.V[2] = 0.0;
@@ -731,6 +736,14 @@ PetscErrorCode RDyComputeAdditionalEdgeAttributes(DM dm, RDyMesh *mesh) {
     // in the direction of the vector perpendicular to the edge.
     PetscReal dot_prod = vec_L2RorEC.V[0] * edge_perp.V[0] + vec_L2RorEC.V[1] * edge_perp.V[1];
 
+    if (iedge == 26) {
+      printf("vertex-1: %f %f\n",vertices->points[vid_1].X[0],vertices->points[vid_1].X[1]);
+      printf("vertex-2: %f %f\n",vertices->points[vid_2].X[0],vertices->points[vid_2].X[1]);
+      printf("cell_l  : %f %f\n",cells->centroids[l].X[0],cells->centroids[l].X[1]);
+      printf("cell_r  : %f %f\n",edges->centroids[iedge].X[0],edges->centroids[iedge].X[1]);
+      printf("dot_prod: %f\n",dot_prod);
+      //exit(0);
+    }
     if (dot_prod < 0.0) {
       // The angle between edge_perp and vec_L2RorEC is greater than 90 deg.
       // Thus, flip vertex ids and the normal vector
@@ -755,6 +768,7 @@ PetscErrorCode RDyComputeAdditionalEdgeAttributes(DM dm, RDyMesh *mesh) {
 
     edges->sn[iedge] = -dx / ds;
     edges->cn[iedge] = dy / ds;
+    edges->lengths[iedge] = ds;
   }
 
   // allocate memory to save IDs of internal and boundary edges
@@ -1301,6 +1315,8 @@ static PetscErrorCode SetInitialCondition(RDyApp app, Vec X) {
     } else {
       x_ptr[idx] = app->hd;
     }
+    if (icell<10) x_ptr[idx] = 1.0;
+    else          x_ptr[idx] = 0.1;
   }
 
   VecRestoreArray(X, &x_ptr);
@@ -1620,6 +1636,14 @@ PetscErrorCode RHSFunctionForInternalEdges(RDyApp app, Vec F, PetscReal *amax_va
         PetscReal areal = cells->areas[l];
         PetscReal arear = cells->areas[r];
 
+        if (l == 9 || r == 9 ) {
+          printf("Internal %02d; %02d <----> %02d; %18.16f; %18.16f %18.16f\n",iedge, l, r, edgeLen, areal, arear);
+          printf("%+18.16f %18.16f %18.16f\n",hl_vec_int[ii], ul_vec_int[ii], vl_vec_int[ii]);
+          printf("%+18.16f %18.16f %18.16f\n",hr_vec_int[ii], ur_vec_int[ii], vr_vec_int[ii]);
+          printf("%+18.16f %18.16f \n",sn_vec_int[ii], cn_vec_int[ii]);
+          printf("%+18.16f %18.16f %18.16f %+18.16f\n", flux_vec_int[ii][0], flux_vec_int[ii][1], flux_vec_int[ii][2], amax_vec_int[ii]);
+          printf("\n");
+        }
         for (PetscInt idof = 0; idof < ndof; idof++) {
           if (cells->is_local[l]) f_ptr[l * ndof + idof] -= flux_vec_int[ii][idof] * edgeLen / areal;
           if (cells->is_local[r]) f_ptr[r * ndof + idof] += flux_vec_int[ii][idof] * edgeLen / arear;
@@ -1732,6 +1756,17 @@ PetscErrorCode RHSFunctionForBoundaryEdges(RDyApp app, Vec F, PetscReal *amax_va
 
       if (!(hl < app->tiny_h)) {
         *amax_value = fmax(*amax_value, amax_vec_bnd[ii]);
+
+        if (l == 9 ) {
+          printf("Boundary %02d; %02d <----> %02d; %18.16f; %18.16f \n",iedge, l, edges->cell_ids[cellOffset + 1], edgeLen, areal);
+          printf("%+18.16f %18.16f %18.16f\n",hl_vec_bnd[ii], ul_vec_bnd[ii], vl_vec_bnd[ii]);
+          printf("%+18.16f %18.16f %18.16f\n",hr_vec_bnd[ii], ur_vec_bnd[ii], vr_vec_bnd[ii]);
+          printf("%+18.16f %18.16f \n",sn_vec_bnd[ii], cn_vec_bnd[ii]);
+          printf("%+18.16f %18.16f %18.16f %+18.16f\n", flux_vec_bnd[ii][0], flux_vec_bnd[ii][1], flux_vec_bnd[ii][2], amax_vec_bnd[ii]);
+          printf("\n");
+        }
+
+
         for (PetscInt idof = 0; idof < ndof; idof++) {
           f_ptr[l * ndof + idof] -= flux_vec_bnd[ii][idof] * edgeLen / areal;
         }
@@ -1816,6 +1851,7 @@ PetscErrorCode AddSourceTerm(RDyApp app, Vec F) {
         tby = (hv + dt * Fsum_y - dt * bedy) * factor;
       }
 
+      printf("%02d %+18.16f %+18.16f %+18.16f %+18.16f %+18.16f %+18.16f %+18.16f\n",icell,f_ptr[icell * ndof + 0],f_ptr[icell * ndof + 1],f_ptr[icell * ndof + 2],bedx,bedy,tbx,tby);
       f_ptr[icell * ndof + 0] += 0.0;
       f_ptr[icell * ndof + 1] += -bedx - tbx;
       f_ptr[icell * ndof + 2] += -bedy - tby;
@@ -1876,7 +1912,7 @@ PetscErrorCode RHSFunction(TS ts, PetscReal t, Vec X, Vec F, void *ptr) {
     PetscCall(VecDestroy(&natural));
   }
 
-  PetscPrintf(PETSC_COMM_SELF, "Time Step = %d, rank = %d, Courant Number = %f\n", 1, app->rank, amax_value * app->dt * 2);
+  PetscPrintf(PETSC_COMM_SELF, "Time Step = %d, rank = %d, Courant Number = %f\n", 1, app->rank, amax_value);
 
   PetscFunctionReturn(0);
 }
