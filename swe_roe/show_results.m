@@ -11,7 +11,7 @@ if ~exist('PetscBinaryRead')
 
     % Let's try to get information about PETSc from environment variable
     [~,PETSC_DIR] = system('echo $PETSC_DIR');
-    if (exists(PETSC_DIR))
+    if (exist(PETSC_DIR))
         addpath([PETSC_DIR(1:end-1) '/share/petsc/matlab/'])
     else
         error(['Please add PETSc MATLAB files before calling this script via: ' char(10) ...
