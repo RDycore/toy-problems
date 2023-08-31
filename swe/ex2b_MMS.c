@@ -20,7 +20,6 @@ PetscReal u0 = 0.025;
 PetscReal v0 = 0.025;
 PetscReal t0 = 20;
 
-
 /// Allocates a block of memory of the given type, consisting of count
 /// contiguous elements and placing the allocated memory in the given result
 /// pointer. Memory is zero-initialized. Returns a PetscErrorCode.
@@ -686,13 +685,12 @@ PetscErrorCode RDyComputeAdditionalEdgeAttributes(DM dm, RDyMesh *mesh) {
     assert(l >= 0);
     PetscBool is_internal_edge = (r >= 0);
 
-    //mesh->num_internal_edges++;
+    // mesh->num_internal_edges++;
     if (is_internal_edge) {
       mesh->num_internal_edges++;
     } else {
       mesh->num_boundary_edges++;
     }
-    
 
     /*
                  Case-1                      Case-2                       Update Case-2
@@ -776,7 +774,6 @@ PetscErrorCode RDyComputeAdditionalEdgeAttributes(DM dm, RDyMesh *mesh) {
 
     edges->sn[iedge] = -dx / ds;
     edges->cn[iedge] = dy / ds;
-
   }
 
   // allocate memory to save IDs of internal and boundary edges
@@ -864,7 +861,6 @@ static PetscErrorCode ComputeXYSlopesForTriangle(PetscReal xyz0[3], PetscReal xy
     y2 = xyz1[1];
     z2 = xyz1[2];
   }
-
 
   PetscReal num, den;
   num    = (y2 - y0) * (z1 - z0) - (y1 - y0) * (z2 - z0);
@@ -1182,8 +1178,8 @@ static PetscErrorCode ProcessOptions(MPI_Comm comm, RDyApp app) {
     PetscCall(PetscOptionsString("-mesh", "The mesh file", "ex2.c", app->mesh_file, app->mesh_file, PETSC_MAX_PATH_LEN, NULL));
     PetscCall(PetscOptionsString("-initial_condition", "The initial condition file", "ex2.c", app->initial_condition_file,
                                  app->initial_condition_file, PETSC_MAX_PATH_LEN, NULL));
-    PetscCall(PetscOptionsString("-mannings_n_file", "The Mannings n file", "ex2.c", app->mannings_n_file,
-                                 app->mannings_n_file, PETSC_MAX_PATH_LEN, NULL));
+    PetscCall(
+        PetscOptionsString("-mannings_n_file", "The Mannings n file", "ex2.c", app->mannings_n_file, app->mannings_n_file, PETSC_MAX_PATH_LEN, NULL));
     PetscCall(PetscOptionsString("-output_prefix", "Output prefix", "ex2.c", app->output_prefix, app->output_prefix, PETSC_MAX_PATH_LEN, NULL));
     PetscCall(PetscOptionsReal("-mannings_n", "mannings_n", "", app->mannings_n, &app->mannings_n, NULL));
   }
@@ -1408,7 +1404,6 @@ static PetscErrorCode SetInitialConditionFromFile(RDyApp app, Vec X) {
   PetscFunctionReturn(0);
 }
 
-
 /// @brief Sets Manning's n
 /// @param [inout] app An application context
 /// @return 0 on success, or a non-zero error code on failure
@@ -1434,7 +1429,6 @@ static PetscErrorCode SetManningsN(RDyApp app) {
   PetscFunctionReturn(0);
 }
 
-
 /// @brief Reads Manning's n from file
 /// @param [inout] app An application context
 /// @return 0 on success, or a non-zero error code on failure
@@ -1455,7 +1449,6 @@ static PetscErrorCode SetManningsNFromFile(RDyApp app) {
 
   PetscFunctionReturn(0);
 }
-
 
 PetscErrorCode AddBuildings(RDyApp app) {
   PetscFunctionBeginUser;
@@ -1607,8 +1600,6 @@ PetscErrorCode MarkBoundaryEdgeType(RDyApp app) {
 
   PetscFunctionReturn(0);
 }
-
-
 
 /// @brief Computes flux based on Roe solver
 /// @param N Size of the array
@@ -1780,7 +1771,6 @@ PetscErrorCode RHSFunctionForInternalEdges(RDyApp app, Vec F, PetscReal *amax_va
     hr_vec_int[ii]  = x_ptr[r * ndof + 0];
     hur_vec_int[ii] = x_ptr[r * ndof + 1];
     hvr_vec_int[ii] = x_ptr[r * ndof + 2];
-
   }
 
   // Compute u/v for left and right cells
@@ -1848,13 +1838,10 @@ PetscErrorCode RHSFunctionForInternalEdges(RDyApp app, Vec F, PetscReal *amax_va
         *crmax_value = fmax(*crmax_value, amax_vec_int[ii] * edgeLen / areal * app->dt);
         *crmax_value = fmax(*crmax_value, amax_vec_int[ii] * edgeLen / arear * app->dt);
 
-
         for (PetscInt idof = 0; idof < ndof; idof++) {
           if (cells->is_local[l]) f_ptr[l * ndof + idof] -= flux_vec_int[ii][idof] * edgeLen / areal;
           if (cells->is_local[r]) f_ptr[r * ndof + idof] += flux_vec_int[ii][idof] * edgeLen / arear;
         }
-
-
       }
 
     } else if (bl == 1 && br == 0) {
@@ -1897,9 +1884,9 @@ PetscErrorCode RHSFunctionForInternalEdges(RDyApp app, Vec F, PetscReal *amax_va
 PetscErrorCode RHSFunctionForBoundaryEdges(RDyApp app, PetscReal t, Vec F, PetscReal *amax_value, PetscReal *crmax_value) {
   PetscFunctionBeginUser;
 
-  RDyMesh  *mesh  = &app->mesh;
-  RDyCells *cells = &mesh->cells;
-  RDyEdges *edges = &mesh->edges;
+  RDyMesh     *mesh     = &app->mesh;
+  RDyCells    *cells    = &mesh->cells;
+  RDyEdges    *edges    = &mesh->edges;
   RDyVertices *vertices = &mesh->vertices;
 
   // Get pointers to vector data
@@ -1938,22 +1925,19 @@ PetscErrorCode RHSFunctionForBoundaryEdges(RDyApp app, PetscReal t, Vec F, Petsc
     PetscReal xe = edges->centroids[iedge].X[0];
     PetscReal ye = edges->centroids[iedge].X[1];
 
-    
     cn_vec_bnd[ii] = edges->cn[iedge];
     sn_vec_bnd[ii] = edges->sn[iedge];
-
 
     PetscReal xc_l = cells->centroids[l].X[0];
     PetscReal yc_l = cells->centroids[l].X[1];
     if (xe == 0 || xe == Lx) {
-        PetscReal dx = xc_l - xe;
-        xe -= dx;
+      PetscReal dx = xc_l - xe;
+      xe -= dx;
     }
     if (ye == 0 || ye == Ly) {
-        PetscReal dy = yc_l - ye;
-        ye -= dy;
+      PetscReal dy = yc_l - ye;
+      ye -= dy;
     }
-
 
     if (cells->is_local[l] && b_ptr[l] == 0) {
       // Perform computation for a boundary edge
@@ -1963,9 +1947,9 @@ PetscErrorCode RHSFunctionForBoundaryEdges(RDyApp app, PetscReal t, Vec F, Petsc
         case REFLECTING_WALL:
 
           // add BC to boundary edge
-          hr_vec_bnd[ii] = h0 * ( 1+PetscSinScalar(PI*xe/Lx)*PetscSinScalar(PI*ye/Ly) ) * PetscExpScalar(t/t0);
-          ur_vec_bnd[ii] = u0 * PetscCosScalar(PI*xe/Lx) * PetscSinScalar(PI*ye/Ly) * PetscExpScalar(t/t0);
-          vr_vec_bnd[ii] = v0 * PetscSinScalar(PI*xe/Lx) * PetscCosScalar(PI*ye/Ly) * PetscExpScalar(t/t0);
+          hr_vec_bnd[ii] = h0 * (1 + PetscSinScalar(PI * xe / Lx) * PetscSinScalar(PI * ye / Ly)) * PetscExpScalar(t / t0);
+          ur_vec_bnd[ii] = u0 * PetscCosScalar(PI * xe / Lx) * PetscSinScalar(PI * ye / Ly) * PetscExpScalar(t / t0);
+          vr_vec_bnd[ii] = v0 * PetscSinScalar(PI * xe / Lx) * PetscCosScalar(PI * ye / Ly) * PetscExpScalar(t / t0);
 
           break;
         case CRITICAL_OUTFLOW:
@@ -2009,11 +1993,9 @@ PetscErrorCode RHSFunctionForBoundaryEdges(RDyApp app, PetscReal t, Vec F, Petsc
         *amax_value  = fmax(*amax_value, amax_vec_bnd[ii]);
         *crmax_value = fmax(*crmax_value, amax_vec_bnd[ii] * edgeLen / areal * app->dt);
 
-
         for (PetscInt idof = 0; idof < ndof; idof++) {
           f_ptr[l * ndof + idof] -= flux_vec_bnd[ii][idof] * edgeLen / areal;
         }
-
       }
     }
   }
@@ -2098,61 +2080,59 @@ PetscErrorCode AddSourceTerm(RDyApp app, Vec F, PetscReal t) {
       f_ptr[icell * ndof + 1] += -bedx - tbx;
       f_ptr[icell * ndof + 2] += -bedy - tby;
 
-
       // MMS source term
       PetscReal xc = cells->centroids[icell].X[0];
       PetscReal yc = cells->centroids[icell].X[1];
 
-      PetscReal h_MMS = h0 * ( 1+PetscSinScalar(PI*xc/Lx)*PetscSinScalar(PI*yc/Ly) ) * PetscExpScalar(t/t0);
-      PetscReal u_MMS = u0 * PetscCosScalar(PI*xc/Lx) * PetscSinScalar(PI*yc/Ly) * PetscExpScalar(t/t0);
-      PetscReal v_MMS = v0 * PetscSinScalar(PI*xc/Lx) * PetscCosScalar(PI*yc/Ly) * PetscExpScalar(t/t0);
+      PetscReal h_MMS = h0 * (1 + PetscSinScalar(PI * xc / Lx) * PetscSinScalar(PI * yc / Ly)) * PetscExpScalar(t / t0);
+      PetscReal u_MMS = u0 * PetscCosScalar(PI * xc / Lx) * PetscSinScalar(PI * yc / Ly) * PetscExpScalar(t / t0);
+      PetscReal v_MMS = v0 * PetscSinScalar(PI * xc / Lx) * PetscCosScalar(PI * yc / Ly) * PetscExpScalar(t / t0);
 
       //
-      PetscReal dhdt = h0/t0 * ( 1+PetscSinScalar(PI*xc/Lx)*PetscSinScalar(PI*yc/Ly) ) * PetscExpScalar(t/t0); 
-      PetscReal dhdx = PI*h0/Lx * PetscExpScalar(t/t0) * PetscSinScalar(PI*yc/Ly) * PetscCosScalar(PI*xc/Lx);
-      PetscReal dhdy = PI*h0/Ly * PetscExpScalar(t/t0) * PetscSinScalar(PI*xc/Lx) * PetscCosScalar(PI*yc/Ly);
+      PetscReal dhdt = h0 / t0 * (1 + PetscSinScalar(PI * xc / Lx) * PetscSinScalar(PI * yc / Ly)) * PetscExpScalar(t / t0);
+      PetscReal dhdx = PI * h0 / Lx * PetscExpScalar(t / t0) * PetscSinScalar(PI * yc / Ly) * PetscCosScalar(PI * xc / Lx);
+      PetscReal dhdy = PI * h0 / Ly * PetscExpScalar(t / t0) * PetscSinScalar(PI * xc / Lx) * PetscCosScalar(PI * yc / Ly);
 
-      PetscReal dudt = u0/t0 * PetscCosScalar(PI*xc/Lx)*PetscSinScalar(PI*yc/Ly) * PetscExpScalar(t/t0);  
-      PetscReal dudx = (-1)*PI*u0/Lx * PetscSinScalar(PI*xc/Lx) * PetscSinScalar(PI*yc/Ly) * PetscExpScalar(t/t0);
-      PetscReal dudy = PI*u0/Ly * PetscCosScalar(PI*xc/Lx) * PetscCosScalar(PI*yc/Ly) * PetscExpScalar(t/t0);
+      PetscReal dudt = u0 / t0 * PetscCosScalar(PI * xc / Lx) * PetscSinScalar(PI * yc / Ly) * PetscExpScalar(t / t0);
+      PetscReal dudx = (-1) * PI * u0 / Lx * PetscSinScalar(PI * xc / Lx) * PetscSinScalar(PI * yc / Ly) * PetscExpScalar(t / t0);
+      PetscReal dudy = PI * u0 / Ly * PetscCosScalar(PI * xc / Lx) * PetscCosScalar(PI * yc / Ly) * PetscExpScalar(t / t0);
 
-      PetscReal dvdt = v0/t0 * PetscSinScalar(PI*xc/Lx) * PetscCosScalar(PI*yc/Ly) * PetscExpScalar(t/t0);
-      PetscReal dvdx = PI*v0/Lx * PetscCosScalar(PI*xc/Lx) * PetscCosScalar(PI*yc/Ly) * PetscExpScalar(t/t0);
-      PetscReal dvdy = (-1)*PI*v0/Ly * PetscSinScalar(PI*xc/Lx) * PetscSinScalar(PI*yc/Ly) * PetscExpScalar(t/t0);
+      PetscReal dvdt = v0 / t0 * PetscSinScalar(PI * xc / Lx) * PetscCosScalar(PI * yc / Ly) * PetscExpScalar(t / t0);
+      PetscReal dvdx = PI * v0 / Lx * PetscCosScalar(PI * xc / Lx) * PetscCosScalar(PI * yc / Ly) * PetscExpScalar(t / t0);
+      PetscReal dvdy = (-1) * PI * v0 / Ly * PetscSinScalar(PI * xc / Lx) * PetscSinScalar(PI * yc / Ly) * PetscExpScalar(t / t0);
 
-      f_ptr[icell * ndof + 0] += dhdt + u_MMS*dhdx + h_MMS*dudx + v_MMS*dhdy +h_MMS*dvdy;
-      f_ptr[icell * ndof + 1] += u_MMS*dhdt + h_MMS*dudt + 2*u_MMS*h_MMS*dudx + u_MMS*u_MMS*dhdx + GRAVITY*h_MMS*dhdx + u_MMS*h_MMS*dvdy + v_MMS*h_MMS*dudy + u_MMS*v_MMS*dhdy;
-      f_ptr[icell * ndof + 2] += v_MMS*dhdt + h_MMS*dvdt + u_MMS*h_MMS*dvdx + v_MMS*h_MMS*dudx + u_MMS*v_MMS*dhdx + 2*v_MMS*h_MMS*dvdy + v_MMS*v_MMS*dhdy + GRAVITY*h_MMS*dhdy;
-      
+      f_ptr[icell * ndof + 0] += dhdt + u_MMS * dhdx + h_MMS * dudx + v_MMS * dhdy + h_MMS * dvdy;
+      f_ptr[icell * ndof + 1] += u_MMS * dhdt + h_MMS * dudt + 2 * u_MMS * h_MMS * dudx + u_MMS * u_MMS * dhdx + GRAVITY * h_MMS * dhdx +
+                                 u_MMS * h_MMS * dvdy + v_MMS * h_MMS * dudy + u_MMS * v_MMS * dhdy;
+      f_ptr[icell * ndof + 2] += v_MMS * dhdt + h_MMS * dvdt + u_MMS * h_MMS * dvdx + v_MMS * h_MMS * dudx + u_MMS * v_MMS * dhdx +
+                                 2 * v_MMS * h_MMS * dvdy + v_MMS * v_MMS * dhdy + GRAVITY * h_MMS * dhdy;
 
       PetscReal bedx_MMS = dz_dx * GRAVITY * h_MMS;
       PetscReal bedy_MMS = dz_dy * GRAVITY * h_MMS;
 
       PetscReal tbx_MMS = 0.0, tby_MMS = 0.0;
       if (h_MMS >= app->tiny_h) {
-        //PetscReal Cd_MMS = GRAVITY * Square(app->mannings_n) * PetscPowReal(h_MMS, -1.0 / 3.0);
+        // PetscReal Cd_MMS = GRAVITY * Square(app->mannings_n) * PetscPowReal(h_MMS, -1.0 / 3.0);
         PetscReal Cd_MMS = GRAVITY * Square(n) * PetscPowReal(h_MMS, -1.0 / 3.0);
-        
+
         PetscReal velocity_MMS = PetscSqrtReal(Square(u_MMS) + Square(v_MMS));
 
         PetscReal tb_MMS = Cd_MMS * velocity_MMS / h_MMS;
 
-        PetscReal dt     = app->dt;
+        PetscReal dt         = app->dt;
         PetscReal factor_MMS = tb_MMS / (1.0 + dt * tb_MMS);
 
-        PetscReal h_MMS1 = h0 * ( 1+PetscSinScalar(PI*xc/Lx)*PetscSinScalar(PI*yc/Ly) ) * PetscExpScalar((t+dt)/t0);
-        PetscReal u_MMS1 = u0 * PetscCosScalar(PI*xc/Lx) * PetscSinScalar(PI*yc/Ly) * PetscExpScalar((t+dt)/t0);
-        PetscReal v_MMS1 = v0 * PetscSinScalar(PI*xc/Lx) * PetscCosScalar(PI*yc/Ly) * PetscExpScalar((t+dt)/t0);
-        tbx_MMS = h_MMS1*u_MMS1 * factor_MMS;
-        tby_MMS = h_MMS1*v_MMS1 * factor_MMS;
+        PetscReal h_MMS1 = h0 * (1 + PetscSinScalar(PI * xc / Lx) * PetscSinScalar(PI * yc / Ly)) * PetscExpScalar((t + dt) / t0);
+        PetscReal u_MMS1 = u0 * PetscCosScalar(PI * xc / Lx) * PetscSinScalar(PI * yc / Ly) * PetscExpScalar((t + dt) / t0);
+        PetscReal v_MMS1 = v0 * PetscSinScalar(PI * xc / Lx) * PetscCosScalar(PI * yc / Ly) * PetscExpScalar((t + dt) / t0);
+        tbx_MMS          = h_MMS1 * u_MMS1 * factor_MMS;
+        tby_MMS          = h_MMS1 * v_MMS1 * factor_MMS;
       }
 
       f_ptr[icell * ndof + 1] += bedx_MMS + tbx_MMS;
       f_ptr[icell * ndof + 2] += bedy_MMS + tby_MMS;
-   
     }
   }
-  
 
   // Restore vectors
   PetscCall(VecRestoreArray(app->localX, &x_ptr));
@@ -2160,7 +2140,6 @@ PetscErrorCode AddSourceTerm(RDyApp app, Vec F, PetscReal t) {
 
   PetscFunctionReturn(0);
 }
-
 
 /// @brief It is the RHSFunction called by TS
 /// @param [in] ts A TS struct
@@ -2272,7 +2251,7 @@ int main(int argc, char **argv) {
   if (!len2) {
     PetscCall(SetManningsN(app));
   } else {
-    PetscCall(SetManningsNFromFile(app)); 
+    PetscCall(SetManningsNFromFile(app));
   }
 
   {
