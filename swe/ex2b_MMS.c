@@ -2293,7 +2293,6 @@ int main(int argc, char **argv) {
   /* - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -  *
    *  Add buildings
    * - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -  */
-  /*
   if (app->add_building) {
     PetscCall(AddBuildings(app));
   }
@@ -2301,8 +2300,6 @@ int main(int argc, char **argv) {
   if (app->use_critical_flow_bc || app->use_prescribed_head_bc) {
     PetscCall(MarkBoundaryEdgeType(app));
   }
-  */
-
 
   /* - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -  *
    *  Create timestepping solver context
