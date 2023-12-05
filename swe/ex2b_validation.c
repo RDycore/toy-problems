@@ -1914,8 +1914,9 @@ PetscErrorCode RHSFunctionForBoundaryEdges(RDyApp app, Vec F, PetscReal *amax_va
       // Perform computation for a boundary edge
 
       PetscReal hl = x_ptr[l * ndof + 0];
+      PetscReal hr = hr_vec_bnd[ii];
 
-      if (!(hl < app->tiny_h)) {
+      if (!(hl < app->tiny_h && hr < app->tiny_h)) {
         *amax_value  = fmax(*amax_value, amax_vec_bnd[ii]);
         *crmax_value = fmax(*crmax_value, amax_vec_bnd[ii] * edgeLen / areal * app->dt);
 
