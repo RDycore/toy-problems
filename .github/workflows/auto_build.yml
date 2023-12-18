@@ -39,7 +39,10 @@ jobs:
         mpiexec -n 3 ./ex2b -mesh ../share/meshes/DamBreak_grid5x10.exo -initial_condition ../share/initial_conditions/DamBreak_grid5x10_wetdownstream.IC -dt 0.01 -ts_max_time 0.1
         mpiexec -n 3 ./ex2b -mesh ../share/meshes/Turning_1000_1000_dhdx1_with_z.exo -initial_condition ../share/initial_conditions/IC_Turning_1000_1000_dhdx1_with_z.bin -dt 10 -Nt 10 -mannings_n 0.015 -use_critical_flow_bc -boundary_edge_type_file ../share/auxfiles/Turning_1000_1000_dhdx1_with_z_bc_edge_type_critical_outflow.bin
         make ex2b_MMS
-        mpiexec -n 4 ./ex2b_MMS -savef true -output_prefix MMS_dx0.05 -mesh ../share/meshes/MMS_mesh_dx0.05.exo -initial_condition ../share/initial_conditions/MMS_dx0.05.IC -mannings_n_file ../share/auxfiles/manning_n_dx0.05.bin -dt 0.01 -ts_max_time 5
+        mpiexec -n 4 ./ex2b_MMS -savef true -output_prefix MMS_dx0.05 -mesh ../share/meshes/ex2b_MMS_mesh_dx0.05.exo -initial_condition ../share/initial_conditions/ex2b_MMS_dx0.05.IC -mannings_n_file ../share/auxfiles/ex2b_MMS_manning_n_dx0.05.bin -dt 0.01 -ts_max_time 5
+        make ex2b_validation
+        mpiexec -n 4 ./ex2b_validation -savef true -output_prefix ex2b_c_property_immersed -mesh ../share/meshes/ex2b_c_property_immersed.exo -initial_condition ../share/initial_conditions/ex2b_c_property_immersed.IC -mannings_n 0 -dt 0.0001 -ts_max_time 20 -caseid 1.1
+        mpiexec -n 4 ./ex2b_validation -savef true -output_prefix ex2b_well_balancing_sub_to_super -mesh ../share/meshes/ex2b_well_balancing_sub_to_super.exo -initial_condition ../share/initial_conditions/ex2b_well_balancing_sub_to_super.IC -mannings_n 0.0218 -dt 0.01 -ts_max_time 3000 -caseid 2.1
     - name: Build sd demos (${{ matrix.build-type }})
       run: |
         cd sd
