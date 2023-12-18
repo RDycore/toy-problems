@@ -114,7 +114,7 @@ $\mathbf{S}$ is the source vector, $\mathbf{M}$ is a deposited mass vector, and 
 \end{align}
 
 \begin{align}
-\mathbf{E} 
+\mathbf{G} 
 =
     \begin{bmatrix}
     vh                           \\[.5em]
