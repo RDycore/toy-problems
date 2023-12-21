@@ -2119,9 +2119,6 @@ PetscErrorCode AddSourceTerm(RDyApp app, Vec F, PetscReal t) {
 
         PetscReal dt = app->dt;
 
-        PetscReal h_MMS1 = h0 * (1 + PetscSinScalar(PI * xc / Lx) * PetscSinScalar(PI * yc / Ly)) * PetscExpScalar((t + dt) / t0);
-        PetscReal u_MMS1 = u0 * PetscCosScalar(PI * xc / Lx) * PetscSinScalar(PI * yc / Ly) * PetscExpScalar((t + dt) / t0);
-        PetscReal v_MMS1 = v0 * PetscSinScalar(PI * xc / Lx) * PetscCosScalar(PI * yc / Ly) * PetscExpScalar((t + dt) / t0);
         tbx_MMS          = Cd_MMS * u_MMS * velocity_MMS;
         tby_MMS          = Cd_MMS * v_MMS * velocity_MMS;
       }
