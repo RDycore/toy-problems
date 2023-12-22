@@ -2119,8 +2119,8 @@ PetscErrorCode AddSourceTerm(RDyApp app, Vec F, PetscReal t) {
 
         PetscReal dt = app->dt;
 
-        tbx_MMS          = Cd_MMS * u_MMS * velocity_MMS;
-        tby_MMS          = Cd_MMS * v_MMS * velocity_MMS;
+        tbx_MMS = Cd_MMS * u_MMS * velocity_MMS;
+        tby_MMS = Cd_MMS * v_MMS * velocity_MMS;
       }
 
       f_ptr[icell * ndof + 1] += bedx_MMS + tbx_MMS;
