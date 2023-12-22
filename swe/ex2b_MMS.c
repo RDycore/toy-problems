@@ -2107,8 +2107,8 @@ PetscErrorCode AddSourceTerm(RDyApp app, Vec F, PetscReal t) {
       f_ptr[icell * ndof + 2] += v_MMS * dhdt + h_MMS * dvdt + u_MMS * h_MMS * dvdx + v_MMS * h_MMS * dudx + u_MMS * v_MMS * dhdx +
                                  2 * v_MMS * h_MMS * dvdy + v_MMS * v_MMS * dhdy + GRAVITY * h_MMS * dhdy;
 
-      PetscReal bedx_MMS = dz_dx * GRAVITY * h_MMS;
-      PetscReal bedy_MMS = dz_dy * GRAVITY * h_MMS;
+      PetscReal bedx_MMS = (h0 / 2 * PI / Lx * PetscCosScalar(PI * xc / Lx) * PetscSinScalar(PI * yc / Ly)) * GRAVITY * h_MMS;
+      PetscReal bedy_MMS = (h0 / 2 * PI / Ly * PetscSinScalar(PI * xc / Lx) * PetscCosScalar(PI * yc / Ly)) * GRAVITY * h_MMS;
 
       PetscReal tbx_MMS = 0.0, tby_MMS = 0.0;
       if (h_MMS >= app->tiny_h) {
@@ -2117,16 +2117,10 @@ PetscErrorCode AddSourceTerm(RDyApp app, Vec F, PetscReal t) {
 
         PetscReal velocity_MMS = PetscSqrtReal(Square(u_MMS) + Square(v_MMS));
 
-        PetscReal tb_MMS = Cd_MMS * velocity_MMS / h_MMS;
+        PetscReal dt = app->dt;
 
-        PetscReal dt         = app->dt;
-        PetscReal factor_MMS = tb_MMS / (1.0 + dt * tb_MMS);
-
-        PetscReal h_MMS1 = h0 * (1 + PetscSinScalar(PI * xc / Lx) * PetscSinScalar(PI * yc / Ly)) * PetscExpScalar((t + dt) / t0);
-        PetscReal u_MMS1 = u0 * PetscCosScalar(PI * xc / Lx) * PetscSinScalar(PI * yc / Ly) * PetscExpScalar((t + dt) / t0);
-        PetscReal v_MMS1 = v0 * PetscSinScalar(PI * xc / Lx) * PetscCosScalar(PI * yc / Ly) * PetscExpScalar((t + dt) / t0);
-        tbx_MMS          = h_MMS1 * u_MMS1 * factor_MMS;
-        tby_MMS          = h_MMS1 * v_MMS1 * factor_MMS;
+        tbx_MMS = Cd_MMS * u_MMS * velocity_MMS;
+        tby_MMS = Cd_MMS * v_MMS * velocity_MMS;
       }
 
       f_ptr[icell * ndof + 1] += bedx_MMS + tbx_MMS;
