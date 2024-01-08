@@ -12,7 +12,7 @@ PetscReal GRAVITY = 9.806;
 
 #define Square(x) ((x) * (x))
 
-#define PI 3.141592653
+#define PI PETSC_PI
 PetscReal Lx = 5;
 PetscReal Ly = 5;
 PetscReal h0 = 0.005;
