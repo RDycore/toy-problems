@@ -19,7 +19,7 @@ PetscReal h0 = 0.005;
 PetscReal u0 = 0.025;
 PetscReal v0 = 0.025;
 PetscReal t0 = 20.0;
-PetscReal z0 = 0.005/2.0;
+PetscReal z0 = 0.005 / 2.0;
 PetscReal n0 = 0.01;
 
 /// Allocates a block of memory of the given type, consisting of count
@@ -1363,7 +1363,7 @@ static PetscErrorCode MMS_GetData(PetscReal t, PetscReal x, PetscReal y, DataTyp
   PetscReal cos_x = PetscCosScalar(PETSC_PI * x / Lx);
   PetscReal sin_y = PetscSinScalar(PETSC_PI * y / Ly);
   PetscReal cos_y = PetscCosScalar(PETSC_PI * y / Ly);
-  PetscReal exp_t  = PetscExpScalar(t / t0);
+  PetscReal exp_t = PetscExpScalar(t / t0);
 
   switch (dtype) {
     case H:
@@ -2029,11 +2029,11 @@ PetscErrorCode RHSFunctionForBoundaryEdges(RDyApp app, PetscReal t, Vec F, Petsc
           ur_vec_bnd[ii] = u0 * PetscCosScalar(PI * xe / Lx) * PetscSinScalar(PI * ye / Ly) * PetscExpScalar(t / t0);
           vr_vec_bnd[ii] = v0 * PetscSinScalar(PI * xe / Lx) * PetscCosScalar(PI * ye / Ly) * PetscExpScalar(t / t0);
 
-        if (1) {
-          PetscCall(MMS_GetData(t, xe, ye, H, &hr_vec_bnd[ii]));
-          PetscCall(MMS_GetData(t, xe, ye, U, &ur_vec_bnd[ii]));
-          PetscCall(MMS_GetData(t, xe, ye, V, &vr_vec_bnd[ii]));
-        }
+          if (1) {
+            PetscCall(MMS_GetData(t, xe, ye, H, &hr_vec_bnd[ii]));
+            PetscCall(MMS_GetData(t, xe, ye, U, &ur_vec_bnd[ii]));
+            PetscCall(MMS_GetData(t, xe, ye, V, &vr_vec_bnd[ii]));
+          }
 
           break;
         case CRITICAL_OUTFLOW:
@@ -2132,11 +2132,10 @@ PetscErrorCode AddSourceTerm(RDyApp app, Vec F, PetscReal t) {
       PetscReal xc = cells->centroids[icell].X[0];
       PetscReal yc = cells->centroids[icell].X[1];
       PetscReal n0 = 0.01;
-      PetscReal n = n0 * (1.0 + PetscSinScalar(PI * xc / Lx) * PetscSinScalar(PI * yc / Ly));
+      PetscReal n  = n0 * (1.0 + PetscSinScalar(PI * xc / Lx) * PetscSinScalar(PI * yc / Ly));
       if (1) {
         n = n_ptr[icell];
       }
-
 
       PetscReal dz_dx = cells->dz_dx[icell];
       PetscReal dz_dy = cells->dz_dy[icell];
@@ -2424,8 +2423,8 @@ int main(int argc, char **argv) {
 
     PetscReal t = max_time;
     for (PetscInt icell = 0; icell < mesh->num_cells_local; icell++) {
-      PetscReal xc = cells->centroids[icell].X[1];
-      PetscReal yc = cells->centroids[icell].X[0];
+      PetscReal xc    = cells->centroids[icell].X[1];
+      PetscReal yc    = cells->centroids[icell].X[0];
       PetscReal h_MMS = h0 * (1 + PetscSinScalar(PI * xc / Lx) * PetscSinScalar(PI * yc / Ly)) * PetscExpScalar(t / t0);
       PetscReal u_MMS = u0 * PetscCosScalar(PI * xc / Lx) * PetscSinScalar(PI * yc / Ly) * PetscExpScalar(t / t0);
       PetscReal v_MMS = v0 * PetscSinScalar(PI * xc / Lx) * PetscCosScalar(PI * yc / Ly) * PetscExpScalar(t / t0);
@@ -2452,7 +2451,6 @@ int main(int argc, char **argv) {
     PetscCall(VecView(natural, viewer));
     PetscCall(PetscViewerDestroy(&viewer));
     PetscCall(VecDestroy(&natural));
-
   }
 
   PetscCall(TSDestroy(&ts));
