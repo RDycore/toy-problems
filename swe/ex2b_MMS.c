@@ -2307,6 +2307,40 @@ int main(int argc, char **argv) {
     PetscCall(VecView(natural, viewer));
     PetscCall(PetscViewerDestroy(&viewer));
     PetscCall(VecDestroy(&natural));
+
+    Vec analytical_vec;
+    PetscCall(VecDuplicate(X, &analytical_vec));
+    PetscScalar *analytical_ptr;
+
+    RDyMesh  *mesh  = &app->mesh;
+    RDyCells *cells = &mesh->cells;
+    PetscCall(VecGetArray(analytical_vec, &analytical_ptr));
+
+    PetscReal t = max_time;
+    for (PetscInt icell = 0; icell < mesh->num_cells_local; icell++) {
+      PetscReal xc = cells->centroids[icell].X[1];
+      PetscReal yc = cells->centroids[icell].X[0];
+      PetscReal h_MMS = h0 * (1 + PetscSinScalar(PI * xc / Lx) * PetscSinScalar(PI * yc / Ly)) * PetscExpScalar(t / t0);
+      PetscReal u_MMS = u0 * PetscCosScalar(PI * xc / Lx) * PetscSinScalar(PI * yc / Ly) * PetscExpScalar(t / t0);
+      PetscReal v_MMS = v0 * PetscSinScalar(PI * xc / Lx) * PetscCosScalar(PI * yc / Ly) * PetscExpScalar(t / t0);
+
+      analytical_ptr[icell * 3 + 0] = h_MMS;
+      analytical_ptr[icell * 3 + 1] = h_MMS * u_MMS;
+      analytical_ptr[icell * 3 + 2] = h_MMS * v_MMS;
+    }
+    PetscCall(VecRestoreArray(analytical_vec, &analytical_ptr));
+
+    PetscCall(DMPlexCreateNaturalVector(app->dm, &natural));
+    PetscCall(DMPlexGlobalToNaturalBegin(app->dm, analytical_vec, natural));
+    PetscCall(DMPlexGlobalToNaturalEnd(app->dm, X, natural));
+
+    sprintf(fname, "outputs/%s_dt_%f_final_analytical_solution.dat", app->output_prefix, app->dt);
+    PetscCall(PetscViewerBinaryOpen(app->comm, fname, FILE_MODE_WRITE, &viewer));
+
+    PetscCall(VecView(natural, viewer));
+    PetscCall(PetscViewerDestroy(&viewer));
+    PetscCall(VecDestroy(&natural));
+
   }
 
   PetscCall(TSDestroy(&ts));
