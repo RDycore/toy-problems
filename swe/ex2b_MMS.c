@@ -2443,7 +2443,7 @@ int main(int argc, char **argv) {
 
     PetscCall(DMPlexCreateNaturalVector(app->dm, &natural));
     PetscCall(DMPlexGlobalToNaturalBegin(app->dm, analytical_vec, natural));
-    PetscCall(DMPlexGlobalToNaturalEnd(app->dm, X, natural));
+    PetscCall(DMPlexGlobalToNaturalEnd(app->dm, analytical_vec, natural));
 
     sprintf(fname, "outputs/%s_dt_%f_final_analytical_solution.dat", app->output_prefix, app->dt);
     PetscCall(PetscViewerBinaryOpen(app->comm, fname, FILE_MODE_WRITE, &viewer));
