@@ -1424,7 +1424,7 @@ static PetscErrorCode MMS_GetData(PetscReal t, PetscReal x, PetscReal y, DataTyp
       break;
   }
 
-  PetscFunctionReturn(PETSC_SUCCESS);
+  PetscFunctionReturn(0);
 }
 
 /// @brief Sets initial condition for [h, hu, hv]
