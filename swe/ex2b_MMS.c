@@ -13,12 +13,14 @@ PetscReal GRAVITY = 9.806;
 #define Square(x) ((x) * (x))
 
 #define PI PETSC_PI
-PetscReal Lx = 5;
-PetscReal Ly = 5;
+PetscReal Lx = 5.0;
+PetscReal Ly = 5.0;
 PetscReal h0 = 0.005;
 PetscReal u0 = 0.025;
 PetscReal v0 = 0.025;
-PetscReal t0 = 20;
+PetscReal t0 = 20.0;
+PetscReal z0 = 0.005/2.0;
+PetscReal n0 = 0.01;
 
 /// Allocates a block of memory of the given type, consisting of count
 /// contiguous elements and placing the allocated memory in the given result
@@ -1380,6 +1382,79 @@ static PetscErrorCode SetInitialCondition(RDyApp app, Vec X) {
   VecRestoreArray(X, &x_ptr);
 
   PetscFunctionReturn(0);
+}
+
+typedef enum { H, DH_DX, DH_DY, DH_DT, U, DU_DX, DU_DY, DU_DT, V, DV_DX, DV_DY, DV_DT, HU, HV, Z, DZ_DX, DZ_DY, N } DataType;
+
+static PetscErrorCode MMS_GetData(PetscReal t, PetscReal x, PetscReal y, DataType dtype, PetscReal *data) {
+  PetscFunctionBegin;
+
+  PetscReal sin_x = PetscSinScalar(PETSC_PI * x / Lx);
+  PetscReal cos_x = PetscCosScalar(PETSC_PI * x / Lx);
+  PetscReal sin_y = PetscSinScalar(PETSC_PI * y / Ly);
+  PetscReal cos_y = PetscCosScalar(PETSC_PI * y / Ly);
+  PetscReal exp_t  = PetscExpScalar(t / t0);
+
+  switch (dtype) {
+    case H:
+      *data = h0 * (1 + sin_x * sin_y) * exp_t;
+      break;
+    case DH_DX:
+      *data = PETSC_PI * h0 / Lx * exp_t * sin_y * cos_x;
+      break;
+    case DH_DY:
+      *data = PETSC_PI * h0 / Ly * exp_t * sin_x * cos_y;
+      break;
+    case DH_DT:
+      *data = h0 / t0 * (1 + sin_x * sin_y) * exp_t;
+      break;
+    case U:
+      *data = u0 * cos_x * sin_y * exp_t;
+      break;
+    case DU_DX:
+      *data = (-1) * PETSC_PI * u0 / Lx * sin_x * sin_y * exp_t;
+      break;
+    case DU_DY:
+      *data = PETSC_PI * u0 / Ly * cos_x * cos_y * exp_t;
+      break;
+    case DU_DT:
+      *data = u0 / t0 * cos_x * sin_y * exp_t;
+      break;
+    case V:
+      *data = v0 * sin_x * cos_y * exp_t;
+      break;
+    case DV_DX:
+      *data = PETSC_PI * v0 / Lx * cos_x * cos_y * exp_t;
+      break;
+    case DV_DY:
+      *data = (-1) * PETSC_PI * v0 / Ly * sin_x * sin_y * exp_t;
+      break;
+    case DV_DT:
+      *data = v0 / t0 * sin_x * cos_y * exp_t;
+      break;
+    case HU:
+      *data = (h0 * (1 + sin_x * sin_y) * exp_t) * (u0 * cos_x * sin_y * exp_t);
+      break;
+    case HV:
+      *data = (h0 * (1 + sin_x * sin_y) * exp_t) * (v0 * sin_x * cos_y * exp_t);
+      break;
+    case Z:
+      *data = z0 * sin_x * sin_y;
+      break;
+    case DZ_DX:
+      *data = z0 * PETSC_PI / Lx * cos_x * sin_y;
+      break;
+    case DZ_DY:
+      *data = z0 * PETSC_PI / Ly * sin_x * cos_y;
+      break;
+    case N:
+      *data = n0 * (1.0 + sin_x * sin_y);
+      break;
+    default:
+      break;
+  }
+
+  PetscFunctionReturn(PETSC_SUCCESS);
 }
 
 /// @brief Reads initial condition for [h, hu, hv] from file
