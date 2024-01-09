@@ -2044,7 +2044,11 @@ PetscErrorCode AddSourceTerm(RDyApp app, Vec F, PetscReal t) {
       PetscReal h  = h_vec[icell];
       PetscReal hu = hu_vec[icell];
       PetscReal hv = hv_vec[icell];
-      PetscReal n  = n_ptr[icell];
+
+      PetscReal xc = cells->centroids[icell].X[0];
+      PetscReal yc = cells->centroids[icell].X[1];
+      PetscReal n0 = 0.01;
+      PetscReal n = n0 * (1.0 + PetscSinScalar(PI * xc / Lx) * PetscSinScalar(PI * yc / Ly));
 
       PetscReal dz_dx = cells->dz_dx[icell];
       PetscReal dz_dy = cells->dz_dy[icell];
@@ -2081,8 +2085,6 @@ PetscErrorCode AddSourceTerm(RDyApp app, Vec F, PetscReal t) {
       f_ptr[icell * ndof + 2] += -bedy - tby;
 
       // MMS source term
-      PetscReal xc = cells->centroids[icell].X[0];
-      PetscReal yc = cells->centroids[icell].X[1];
 
       PetscReal h_MMS = h0 * (1 + PetscSinScalar(PI * xc / Lx) * PetscSinScalar(PI * yc / Ly)) * PetscExpScalar(t / t0);
       PetscReal u_MMS = u0 * PetscCosScalar(PI * xc / Lx) * PetscSinScalar(PI * yc / Ly) * PetscExpScalar(t / t0);
