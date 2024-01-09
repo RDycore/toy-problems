@@ -1354,36 +1354,6 @@ static PetscErrorCode CreateAuxDM(RDyApp app) {
   PetscFunctionReturn(0);
 }
 
-/// @brief Sets initial condition for [h, hu, hv]
-/// @param [in] app An application context
-/// @param [inout] X Vec for initial condition
-/// @return 0 on success, or a non-zero error code on failure
-static PetscErrorCode SetInitialCondition(RDyApp app, Vec X) {
-  PetscFunctionBegin;
-
-  RDyMesh  *mesh  = &app->mesh;
-  RDyCells *cells = &mesh->cells;
-
-  PetscCall(VecZeroEntries(X));
-
-  PetscScalar *x_ptr;
-  VecGetArray(X, &x_ptr);
-
-  for (PetscInt icell = 0; icell < mesh->num_cells_local; icell++) {
-    PetscInt ndof = app->ndof;
-    PetscInt idx  = icell * ndof;
-    if (cells->centroids[icell].X[1] < 95.0) {
-      x_ptr[idx] = app->hu;
-    } else {
-      x_ptr[idx] = app->hd;
-    }
-  }
-
-  VecRestoreArray(X, &x_ptr);
-
-  PetscFunctionReturn(0);
-}
-
 typedef enum { H, DH_DX, DH_DY, DH_DT, U, DU_DX, DU_DY, DU_DT, V, DV_DX, DV_DY, DV_DT, HU, HV, Z, DZ_DX, DZ_DY, N } DataType;
 
 static PetscErrorCode MMS_GetData(PetscReal t, PetscReal x, PetscReal y, DataType dtype, PetscReal *data) {
@@ -1455,6 +1425,36 @@ static PetscErrorCode MMS_GetData(PetscReal t, PetscReal x, PetscReal y, DataTyp
   }
 
   PetscFunctionReturn(PETSC_SUCCESS);
+}
+
+/// @brief Sets initial condition for [h, hu, hv]
+/// @param [in] app An application context
+/// @param [inout] X Vec for initial condition
+/// @return 0 on success, or a non-zero error code on failure
+static PetscErrorCode SetInitialCondition(RDyApp app, Vec X) {
+  PetscFunctionBegin;
+
+  RDyMesh  *mesh  = &app->mesh;
+  RDyCells *cells = &mesh->cells;
+
+  PetscCall(VecZeroEntries(X));
+
+  PetscScalar *x_ptr;
+  VecGetArray(X, &x_ptr);
+
+  for (PetscInt icell = 0; icell < mesh->num_cells_local; icell++) {
+    PetscInt ndof = app->ndof;
+    PetscInt idx  = icell * ndof;
+    if (cells->centroids[icell].X[1] < 95.0) {
+      x_ptr[idx] = app->hu;
+    } else {
+      x_ptr[idx] = app->hd;
+    }
+  }
+
+  VecRestoreArray(X, &x_ptr);
+
+  PetscFunctionReturn(0);
 }
 
 /// @brief Reads initial condition for [h, hu, hv] from file
