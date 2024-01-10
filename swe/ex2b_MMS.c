@@ -1495,8 +1495,8 @@ static PetscErrorCode SetManningsN(RDyApp app) {
   PetscReal t = 0.0;
 
   for (PetscInt icell = 0; icell < mesh->num_cells_local; icell++) {
-    PetscReal xc = cells->centroids[icell].X[1];
-    PetscReal yc = cells->centroids[icell].X[0];
+    PetscReal xc = cells->centroids[icell].X[0];
+    PetscReal yc = cells->centroids[icell].X[1];
     PetscCall(MMS_GetData(t, xc, yc, N, &n_ptr[icell]));
   }
 
