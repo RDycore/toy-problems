@@ -2421,7 +2421,8 @@ int main(int argc, char **argv) {
     RDyCells *cells = &mesh->cells;
     PetscCall(VecGetArray(analytical_vec, &analytical_ptr));
 
-    PetscReal t = max_time;
+    PetscReal t;
+    PetscCall(TSGetTime(ts, &t));
     for (PetscInt icell = 0; icell < mesh->num_cells_local; icell++) {
       PetscReal xc    = cells->centroids[icell].X[0];
       PetscReal yc    = cells->centroids[icell].X[1];
