@@ -18,7 +18,7 @@ mpiexec -n 40 ./ex2b -save true -output_prefix dambreak500x1000 -mesh ../share/m
 
 ```
 suffixes=("1" "0.5" "0.25" "0.1" "0.05")
-for suffix in $suffixes
+for suffix in "${suffixes[@]}"
 do
   ./ex2b_MMS \
   -savef true \
