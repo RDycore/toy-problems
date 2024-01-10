@@ -1442,14 +1442,18 @@ static PetscErrorCode SetInitialCondition(RDyApp app, Vec X) {
   PetscScalar *x_ptr;
   VecGetArray(X, &x_ptr);
 
+  PetscReal h, hu, hv, t = 0.0;
   for (PetscInt icell = 0; icell < mesh->num_cells_local; icell++) {
-    PetscInt ndof = app->ndof;
-    PetscInt idx  = icell * ndof;
-    if (cells->centroids[icell].X[1] < 95.0) {
-      x_ptr[idx] = app->hu;
-    } else {
-      x_ptr[idx] = app->hd;
-    }
+    PetscReal xc = cells->centroids[icell].X[0];
+    PetscReal yc = cells->centroids[icell].X[1];
+
+    PetscCall(MMS_GetData(t, xc, yc, H, &h));
+    PetscCall(MMS_GetData(t, xc, yc, HU, &hu));
+    PetscCall(MMS_GetData(t, xc, yc, HV, &hv));
+
+    x_ptr[icell * 3 + 0] = h;
+    x_ptr[icell * 3 + 1] = hu;
+    x_ptr[icell * 3 + 2] = hv;
   }
 
   VecRestoreArray(X, &x_ptr);
