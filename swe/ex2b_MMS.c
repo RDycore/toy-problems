@@ -2423,8 +2423,8 @@ int main(int argc, char **argv) {
 
     PetscReal t = max_time;
     for (PetscInt icell = 0; icell < mesh->num_cells_local; icell++) {
-      PetscReal xc    = cells->centroids[icell].X[1];
-      PetscReal yc    = cells->centroids[icell].X[0];
+      PetscReal xc    = cells->centroids[icell].X[0];
+      PetscReal yc    = cells->centroids[icell].X[1];
       PetscReal h_MMS = h0 * (1 + PetscSinScalar(PI * xc / Lx) * PetscSinScalar(PI * yc / Ly)) * PetscExpScalar(t / t0);
       PetscReal u_MMS = u0 * PetscCosScalar(PI * xc / Lx) * PetscSinScalar(PI * yc / Ly) * PetscExpScalar(t / t0);
       PetscReal v_MMS = v0 * PetscSinScalar(PI * xc / Lx) * PetscCosScalar(PI * yc / Ly) * PetscExpScalar(t / t0);
