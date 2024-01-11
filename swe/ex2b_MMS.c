@@ -12,13 +12,15 @@ PetscReal GRAVITY = 9.806;
 
 #define Square(x) ((x) * (x))
 
-#define PI 3.141592653
-PetscReal Lx = 5;
-PetscReal Ly = 5;
+#define PI PETSC_PI
+PetscReal Lx = 5.0;
+PetscReal Ly = 5.0;
 PetscReal h0 = 0.005;
 PetscReal u0 = 0.025;
 PetscReal v0 = 0.025;
-PetscReal t0 = 20;
+PetscReal t0 = 20.0;
+PetscReal z0 = 0.005 / 2.0;
+PetscReal n0 = 0.01;
 
 /// Allocates a block of memory of the given type, consisting of count
 /// contiguous elements and placing the allocated memory in the given result
@@ -1352,6 +1354,79 @@ static PetscErrorCode CreateAuxDM(RDyApp app) {
   PetscFunctionReturn(0);
 }
 
+typedef enum { H, DH_DX, DH_DY, DH_DT, U, DU_DX, DU_DY, DU_DT, V, DV_DX, DV_DY, DV_DT, HU, HV, Z, DZ_DX, DZ_DY, N } DataType;
+
+static PetscErrorCode MMS_GetData(PetscReal t, PetscReal x, PetscReal y, DataType dtype, PetscReal *data) {
+  PetscFunctionBegin;
+
+  PetscReal sin_x = PetscSinScalar(PETSC_PI * x / Lx);
+  PetscReal cos_x = PetscCosScalar(PETSC_PI * x / Lx);
+  PetscReal sin_y = PetscSinScalar(PETSC_PI * y / Ly);
+  PetscReal cos_y = PetscCosScalar(PETSC_PI * y / Ly);
+  PetscReal exp_t = PetscExpScalar(t / t0);
+
+  switch (dtype) {
+    case H:
+      *data = h0 * (1 + sin_x * sin_y) * exp_t;
+      break;
+    case DH_DX:
+      *data = PETSC_PI * h0 / Lx * exp_t * sin_y * cos_x;
+      break;
+    case DH_DY:
+      *data = PETSC_PI * h0 / Ly * exp_t * sin_x * cos_y;
+      break;
+    case DH_DT:
+      *data = h0 / t0 * (1 + sin_x * sin_y) * exp_t;
+      break;
+    case U:
+      *data = u0 * cos_x * sin_y * exp_t;
+      break;
+    case DU_DX:
+      *data = (-1) * PETSC_PI * u0 / Lx * sin_x * sin_y * exp_t;
+      break;
+    case DU_DY:
+      *data = PETSC_PI * u0 / Ly * cos_x * cos_y * exp_t;
+      break;
+    case DU_DT:
+      *data = u0 / t0 * cos_x * sin_y * exp_t;
+      break;
+    case V:
+      *data = v0 * sin_x * cos_y * exp_t;
+      break;
+    case DV_DX:
+      *data = PETSC_PI * v0 / Lx * cos_x * cos_y * exp_t;
+      break;
+    case DV_DY:
+      *data = (-1) * PETSC_PI * v0 / Ly * sin_x * sin_y * exp_t;
+      break;
+    case DV_DT:
+      *data = v0 / t0 * sin_x * cos_y * exp_t;
+      break;
+    case HU:
+      *data = (h0 * (1 + sin_x * sin_y) * exp_t) * (u0 * cos_x * sin_y * exp_t);
+      break;
+    case HV:
+      *data = (h0 * (1 + sin_x * sin_y) * exp_t) * (v0 * sin_x * cos_y * exp_t);
+      break;
+    case Z:
+      *data = z0 * sin_x * sin_y;
+      break;
+    case DZ_DX:
+      *data = z0 * PETSC_PI / Lx * cos_x * sin_y;
+      break;
+    case DZ_DY:
+      *data = z0 * PETSC_PI / Ly * sin_x * cos_y;
+      break;
+    case N:
+      *data = n0 * (1.0 + sin_x * sin_y);
+      break;
+    default:
+      break;
+  }
+
+  PetscFunctionReturn(0);
+}
+
 /// @brief Sets initial condition for [h, hu, hv]
 /// @param [in] app An application context
 /// @param [inout] X Vec for initial condition
@@ -1367,14 +1442,18 @@ static PetscErrorCode SetInitialCondition(RDyApp app, Vec X) {
   PetscScalar *x_ptr;
   VecGetArray(X, &x_ptr);
 
+  PetscReal h, hu, hv, t = 0.0;
   for (PetscInt icell = 0; icell < mesh->num_cells_local; icell++) {
-    PetscInt ndof = app->ndof;
-    PetscInt idx  = icell * ndof;
-    if (cells->centroids[icell].X[1] < 95.0) {
-      x_ptr[idx] = app->hu;
-    } else {
-      x_ptr[idx] = app->hd;
-    }
+    PetscReal xc = cells->centroids[icell].X[0];
+    PetscReal yc = cells->centroids[icell].X[1];
+
+    PetscCall(MMS_GetData(t, xc, yc, H, &h));
+    PetscCall(MMS_GetData(t, xc, yc, HU, &hu));
+    PetscCall(MMS_GetData(t, xc, yc, HV, &hv));
+
+    x_ptr[icell * 3 + 0] = h;
+    x_ptr[icell * 3 + 1] = hu;
+    x_ptr[icell * 3 + 2] = hv;
   }
 
   VecRestoreArray(X, &x_ptr);
@@ -1417,9 +1496,12 @@ static PetscErrorCode SetManningsN(RDyApp app) {
 
   PetscScalar *n_ptr;
   PetscCall(VecGetArray(app->N, &n_ptr));
+  PetscReal t = 0.0;
 
   for (PetscInt icell = 0; icell < mesh->num_cells_local; icell++) {
-    n_ptr[icell] = app->mannings_n;
+    PetscReal xc = cells->centroids[icell].X[0];
+    PetscReal yc = cells->centroids[icell].X[1];
+    PetscCall(MMS_GetData(t, xc, yc, N, &n_ptr[icell]));
   }
 
   PetscCall(VecRestoreArray(app->N, &n_ptr));
@@ -1951,6 +2033,12 @@ PetscErrorCode RHSFunctionForBoundaryEdges(RDyApp app, PetscReal t, Vec F, Petsc
           ur_vec_bnd[ii] = u0 * PetscCosScalar(PI * xe / Lx) * PetscSinScalar(PI * ye / Ly) * PetscExpScalar(t / t0);
           vr_vec_bnd[ii] = v0 * PetscSinScalar(PI * xe / Lx) * PetscCosScalar(PI * ye / Ly) * PetscExpScalar(t / t0);
 
+          if (1) {
+            PetscCall(MMS_GetData(t, xe, ye, H, &hr_vec_bnd[ii]));
+            PetscCall(MMS_GetData(t, xe, ye, U, &ur_vec_bnd[ii]));
+            PetscCall(MMS_GetData(t, xe, ye, V, &vr_vec_bnd[ii]));
+          }
+
           break;
         case CRITICAL_OUTFLOW:
           // Note: The approach below is different from the one implement in OFM.
@@ -2044,7 +2132,14 @@ PetscErrorCode AddSourceTerm(RDyApp app, Vec F, PetscReal t) {
       PetscReal h  = h_vec[icell];
       PetscReal hu = hu_vec[icell];
       PetscReal hv = hv_vec[icell];
-      PetscReal n  = n_ptr[icell];
+
+      PetscReal xc = cells->centroids[icell].X[0];
+      PetscReal yc = cells->centroids[icell].X[1];
+      PetscReal n0 = 0.01;
+      PetscReal n  = n0 * (1.0 + PetscSinScalar(PI * xc / Lx) * PetscSinScalar(PI * yc / Ly));
+      if (1) {
+        n = n_ptr[icell];
+      }
 
       PetscReal dz_dx = cells->dz_dx[icell];
       PetscReal dz_dy = cells->dz_dy[icell];
@@ -2081,8 +2176,6 @@ PetscErrorCode AddSourceTerm(RDyApp app, Vec F, PetscReal t) {
       f_ptr[icell * ndof + 2] += -bedy - tby;
 
       // MMS source term
-      PetscReal xc = cells->centroids[icell].X[0];
-      PetscReal yc = cells->centroids[icell].X[1];
 
       PetscReal h_MMS = h0 * (1 + PetscSinScalar(PI * xc / Lx) * PetscSinScalar(PI * yc / Ly)) * PetscExpScalar(t / t0);
       PetscReal u_MMS = u0 * PetscCosScalar(PI * xc / Lx) * PetscSinScalar(PI * yc / Ly) * PetscExpScalar(t / t0);
@@ -2100,6 +2193,24 @@ PetscErrorCode AddSourceTerm(RDyApp app, Vec F, PetscReal t) {
       PetscReal dvdt = v0 / t0 * PetscSinScalar(PI * xc / Lx) * PetscCosScalar(PI * yc / Ly) * PetscExpScalar(t / t0);
       PetscReal dvdx = PI * v0 / Lx * PetscCosScalar(PI * xc / Lx) * PetscCosScalar(PI * yc / Ly) * PetscExpScalar(t / t0);
       PetscReal dvdy = (-1) * PI * v0 / Ly * PetscSinScalar(PI * xc / Lx) * PetscSinScalar(PI * yc / Ly) * PetscExpScalar(t / t0);
+
+      if (1) {
+        PetscCall(MMS_GetData(t, xc, yc, H, &h_MMS));
+        PetscCall(MMS_GetData(t, xc, yc, U, &u_MMS));
+        PetscCall(MMS_GetData(t, xc, yc, V, &v_MMS));
+
+        PetscCall(MMS_GetData(t, xc, yc, DH_DT, &dhdt));
+        PetscCall(MMS_GetData(t, xc, yc, DH_DX, &dhdx));
+        PetscCall(MMS_GetData(t, xc, yc, DH_DY, &dhdy));
+
+        PetscCall(MMS_GetData(t, xc, yc, DU_DT, &dudt));
+        PetscCall(MMS_GetData(t, xc, yc, DU_DX, &dudx));
+        PetscCall(MMS_GetData(t, xc, yc, DU_DY, &dudy));
+
+        PetscCall(MMS_GetData(t, xc, yc, DV_DT, &dvdt));
+        PetscCall(MMS_GetData(t, xc, yc, DV_DX, &dvdx));
+        PetscCall(MMS_GetData(t, xc, yc, DV_DY, &dvdy));
+      }
 
       f_ptr[icell * ndof + 0] += dhdt + u_MMS * dhdx + h_MMS * dudx + v_MMS * dhdy + h_MMS * dvdy;
       f_ptr[icell * ndof + 1] += u_MMS * dhdt + h_MMS * dudt + 2 * u_MMS * h_MMS * dudx + u_MMS * u_MMS * dhdx + GRAVITY * h_MMS * dhdx +
@@ -2302,6 +2413,46 @@ int main(int argc, char **argv) {
     PetscCall(DMPlexCreateNaturalVector(app->dm, &natural));
     PetscCall(DMPlexGlobalToNaturalBegin(app->dm, X, natural));
     PetscCall(DMPlexGlobalToNaturalEnd(app->dm, X, natural));
+    PetscCall(VecView(natural, viewer));
+    PetscCall(PetscViewerDestroy(&viewer));
+    PetscCall(VecDestroy(&natural));
+
+    Vec analytical_vec;
+    PetscCall(VecDuplicate(X, &analytical_vec));
+    PetscScalar *analytical_ptr;
+
+    RDyMesh  *mesh  = &app->mesh;
+    RDyCells *cells = &mesh->cells;
+    PetscCall(VecGetArray(analytical_vec, &analytical_ptr));
+
+    PetscReal t;
+    PetscCall(TSGetTime(ts, &t));
+    for (PetscInt icell = 0; icell < mesh->num_cells_local; icell++) {
+      PetscReal xc    = cells->centroids[icell].X[0];
+      PetscReal yc    = cells->centroids[icell].X[1];
+      PetscReal h_MMS = h0 * (1 + PetscSinScalar(PI * xc / Lx) * PetscSinScalar(PI * yc / Ly)) * PetscExpScalar(t / t0);
+      PetscReal u_MMS = u0 * PetscCosScalar(PI * xc / Lx) * PetscSinScalar(PI * yc / Ly) * PetscExpScalar(t / t0);
+      PetscReal v_MMS = v0 * PetscSinScalar(PI * xc / Lx) * PetscCosScalar(PI * yc / Ly) * PetscExpScalar(t / t0);
+
+      if (1) {
+        PetscCall(MMS_GetData(t, xc, yc, H, &h_MMS));
+        PetscCall(MMS_GetData(t, xc, yc, U, &u_MMS));
+        PetscCall(MMS_GetData(t, xc, yc, V, &v_MMS));
+      }
+
+      analytical_ptr[icell * 3 + 0] = h_MMS;
+      analytical_ptr[icell * 3 + 1] = h_MMS * u_MMS;
+      analytical_ptr[icell * 3 + 2] = h_MMS * v_MMS;
+    }
+    PetscCall(VecRestoreArray(analytical_vec, &analytical_ptr));
+
+    PetscCall(DMPlexCreateNaturalVector(app->dm, &natural));
+    PetscCall(DMPlexGlobalToNaturalBegin(app->dm, analytical_vec, natural));
+    PetscCall(DMPlexGlobalToNaturalEnd(app->dm, analytical_vec, natural));
+
+    sprintf(fname, "outputs/%s_dt_%f_final_analytical_solution.dat", app->output_prefix, app->dt);
+    PetscCall(PetscViewerBinaryOpen(app->comm, fname, FILE_MODE_WRITE, &viewer));
+
     PetscCall(VecView(natural, viewer));
     PetscCall(PetscViewerDestroy(&viewer));
     PetscCall(VecDestroy(&natural));
