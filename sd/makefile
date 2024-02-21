@@ -3,7 +3,7 @@ FFLAGS          =
 CPPFLAGS        =
 FPPFLAGS        =
 LOCDIR          = 
-EXAMPLESF       = ex2c.c
+EXAMPLESF       = ex2c.c ex2d.c
 MANSEC          = TS
 DIRS            = toy-problem
 CLEANFILES      = SA-data/*
@@ -11,5 +11,5 @@ include ${PETSC_DIR}/lib/petsc/conf/variables
 include ${PETSC_DIR}/lib/petsc/conf/rules
 include ${PETSC_DIR}/lib/petsc/conf/test
 
-all: ex2c
+all: ex2c ex2d
 .PHONY: all

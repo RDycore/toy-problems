@@ -55,9 +55,7 @@ typedef enum {
 typedef enum {
   PRESCRIBED_HEAD = 0,  // Prescribed head with zero velocity
   CRITICAL_OUTFLOW,     // Critical outflow condition
-  SOFT_BOUNDARY,        // Soft boundary outflow condition
   REFLECTING_WALL,      // Reflecting wall
-  INFLOW_BOUNDARY       // Inflow boundary condition
 } RDyBoundaryEdgeType;
 
 /// A struct of arrays storing information about mesh cells. The ith element in
@@ -265,8 +263,6 @@ PetscErrorCode RDyCellsDestroy(RDyCells cells) {
 typedef struct {
   /// local IDs of vertices in local numbering
   PetscInt *ids;
-  /// local boundary codes
-  PetscInt *bcs;
   /// global IDs of vertices in local numbering
   PetscInt *global_ids;
 
@@ -304,8 +300,6 @@ PetscErrorCode RDyVerticesCreate(PetscInt num_vertices, RDyVertices *vertices) {
   PetscInt edges_per_vertex = 4;
 
   PetscCall(RDyAlloc(PetscInt, num_vertices, &vertices->ids));
-  PetscCall(RDyAlloc(PetscInt, num_vertices, &vertices->bcs));
-  PetscCall(RDyFill(PetscInt, vertices->bcs, num_vertices, 0));
   PetscCall(RDyAlloc(PetscInt, num_vertices, &vertices->global_ids));
   PetscCall(RDyAlloc(PetscInt, num_vertices, &vertices->num_cells));
   PetscCall(RDyAlloc(PetscInt, num_vertices, &vertices->num_edges));
@@ -410,7 +404,6 @@ PetscErrorCode RDyVerticesDestroy(RDyVertices vertices) {
   PetscFunctionBegin;
 
   PetscCall(RDyFree(vertices.ids));
-  PetscCall(RDyFree(vertices.bcs));
   PetscCall(RDyFree(vertices.global_ids));
   PetscCall(RDyFree(vertices.is_local));
   PetscCall(RDyFree(vertices.num_cells));
@@ -429,8 +422,6 @@ PetscErrorCode RDyVerticesDestroy(RDyVertices vertices) {
 typedef struct {
   /// local IDs of edges in local numbering
   PetscInt *ids;
-  /// local boundary codes
-  PetscInt *bcs;
   /// global IDs of edges in local numbering
   PetscInt *global_ids;
   /// local IDs of internal edges
@@ -486,8 +477,6 @@ PetscErrorCode RDyEdgesCreate(PetscInt num_edges, RDyEdges *edges) {
   PetscInt cells_per_edge = 2;
 
   PetscCall(RDyAlloc(PetscInt, num_edges, &edges->ids));
-  PetscCall(RDyAlloc(PetscInt, num_edges, &edges->bcs));
-  PetscCall(RDyFill(PetscInt, edges->bcs, num_edges, 0));
   PetscCall(RDyAlloc(PetscInt, num_edges, &edges->global_ids));
   PetscCall(RDyAlloc(PetscInt, num_edges, &edges->num_cells));
   PetscCall(RDyAlloc(PetscInt, num_edges, &edges->vertex_ids));
@@ -588,7 +577,6 @@ PetscErrorCode RDyEdgesDestroy(RDyEdges edges) {
   PetscFunctionBegin;
 
   PetscCall(RDyFree(edges.ids));
-  PetscCall(RDyFree(edges.bcs));
   PetscCall(RDyFree(edges.global_ids));
   PetscCall(RDyFree(edges.is_local));
   PetscCall(RDyFree(edges.num_cells));
@@ -651,31 +639,13 @@ typedef struct {
   PetscInt  nsed;
   ///sediment density [kg/m^3]
   PetscReal rhos;
-  ///
-  PetscReal iniMeanZ;
-  ///
+  ///initially spatially homogeneous depsoited elevation
+  PetscReal iniMeanZ; 
+  ///bed porosity
   PetscReal bedporosity;
-  ///From Mutchler and Hansen (1970): threshold,h0=0.33*mean raindrop size; Assume raindrop size=2mm
-  PetscReal h0;
-  ///From Heng et al (2011): clay=0.66; loam=1.13; Assume=1.0
-  PetscReal exponent;
-  ///
-  PetscReal delta_phi;
 
   /// * * * * * * * * * READ SEDIMENT INPUT AT CELL LEVEL * * * * * * * * *  ///
-
-  ///detachability of uneroded soil [kg/m^3]
-  PetscReal *a0;
-  ///detachability of deposited soil [kg/m^3]
-  PetscReal *ad;
-  ///effective fraction of excess stream power in entrainment or reentrainment [-]
-  PetscReal *F;
-  ///critical stream power, below which soil entrinment or reentrainment do not occur [kg/s^3]
-  PetscReal *OmegaCr;
-  ///specific energy of entrainment [kg*m^2/s^2/kg] --> [m^2/s^2]
-  PetscReal *J;
-  ///a calibrated parameter denoting the mass of deposited sediment needed to completely sheild the origial soil [kg/m^2]
-  PetscReal *MtS;
+  
   ///total sediment mass in the deposited layer [kg/m^2]
   PetscReal *Mt;
 
@@ -683,12 +653,14 @@ typedef struct {
 
   /// * * * * * * * *  READ SEDIMENT INPUT AT CLASS LEVEL * * * * * * * * *  ///
 
+  ///Krone-Partheniades erosion law constant [kg/m2/s]
+  PetscReal *M;
   ///settling velocity of each sediment class [m/s]
   PetscReal *vset;
-  ///ratio of the amount of sediment of class i to that of the original soil [-]
-  PetscReal *pi;
-  /// [m]
-  PetscReal *Dia;
+  ///critical shear stress for erosion (N/m2)
+  PetscReal *tau_ce;
+  ///critical shear stress for deposition (N/m2)
+  PetscReal *tau_cd;
 
   /// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -  ///
 
@@ -696,20 +668,12 @@ typedef struct {
   PetscReal *Mi;
   PetscReal *Ci;
   PetscReal *Ei;
-  PetscReal *Eri;
-  PetscReal *Ri;
-  PetscReal *Rri;
   PetscReal *Di;
 
   /// ARRAY AT CELL LEVEL
   PetscReal *Ct;
-  PetscReal *Omega;
-  /// ARRAY AT CLASS LEVEL
+  PetscReal *tau_b;
 
-  /// Sediment discharge at outlet
-  PetscReal *Soutlet;
-  /// Inflow Ci
-  PetscReal *Ci_inflow;
 
 } RDySed;
 
@@ -759,16 +723,6 @@ struct _n_RDyApp {
   PetscInt tstep;
   /// Manning's roughness coefficient
   PetscReal mannings_n;
-  /// IC opoition, ic_opt = 0: cold start; ic_opt = 1: dam break condition; ic_opt = 2: constant h
-  PetscInt  ic_opt;
-  /// IC for water depth if ic_opt = 2
-  PetscReal h_ic;
-  /// Flow discharge at outlet
-  PetscReal Qoutlet;
-  /// Flow discharge file
-  FILE      *fq;
-  /// Sediment discharge file
-  FILE      *fs;
 
   PetscInt  ndof;
   Vec       B, localB;
@@ -780,17 +734,12 @@ struct _n_RDyApp {
   char      boundary_edge_type_file[PETSC_MAX_PATH_LEN];
   PetscBool use_critical_flow_bc;
   PetscBool use_prescribed_head_bc;
-  PetscBool use_soft_boundary_bc;
-  PetscBool use_prescribed_inflow_bc;
 
   /// mesh representing simulation domain
   RDyMesh mesh;
   /// sediment structure varible
   RDySed  sed;
 
-  /// inflow information
-  PetscReal eta_inflow;
-  PetscReal Q_inflow;
 };
 
 /// alias for pointer to the application context
@@ -953,20 +902,9 @@ PetscErrorCode RDyComputeAdditionalEdgeAttributes(DM dm, RDyMesh *mesh) {
     } 
     else {
       edges->boundary_edge_ids[mesh->num_boundary_edges]     = iedge;
-      if (vertices->bcs[vid_1] == 2 || vertices->bcs[vid_2] == 2) {
-        edges->boundary_edge_types[mesh->num_boundary_edges++] = SOFT_BOUNDARY;
-      }
-      else if (vertices->bcs[vid_1] == 4 && vertices->bcs[vid_2] == 4) {
-        edges->boundary_edge_types[mesh->num_boundary_edges++] = INFLOW_BOUNDARY;
-      } 
-      else {
-        edges->boundary_edge_types[mesh->num_boundary_edges++] = REFLECTING_WALL;
-      }
+      edges->boundary_edge_types[mesh->num_boundary_edges++] = REFLECTING_WALL;
     }
   }
-
-  printf("Internal Edges number is %d\n", mesh->num_internal_edges);
-  printf("Boundary Edges number is %d\n", mesh->num_boundary_edges);
 
   PetscFunctionReturn(0);
 }
@@ -1039,44 +977,6 @@ static PetscErrorCode ComputeXYSlopesForTriangle(PetscReal xyz0[3], PetscReal xy
   num    = (x2 - x0) * (z1 - z0) - (x1 - x0) * (z2 - z0);
   den    = (x2 - x0) * (y1 - y0) - (x1 - x0) * (y2 - y0);
   *dz_dy = num / den;
-
-  PetscFunctionReturn(0);
-}
-
-/// @brief find outlet boundary type 
-/// @param [inout] mesh A pointer to an RDyMesh mesh data.
-/// @return 0 on success, or a non-zero error code on failure
-PetscErrorCode RDyFindBoundaryTypes(RDyMesh *mesh, PetscInt sediflag) {
-  PetscFunctionBegin;
-
-  RDyVertices *vertices = &mesh->vertices;
-
-  ///Hard code boundary code, TODO: read from input file
-  for (PetscInt ivert = 0; ivert < mesh->num_vertices; ivert++) {
-    PetscReal x = vertices->points[ivert].X[0];
-    PetscReal y = vertices->points[ivert].X[1];
-    PetscReal z = vertices->points[ivert].X[2];
-    if (sediflag == 1) {
-      if (x == 0 || y == 0 || y == 1) {
-        vertices->bcs[ivert] = 1;
-      }
-      if (z == 10) {
-        vertices->bcs[ivert] = 2;
-      }
-    }
-    else if (sediflag == 2) {
-      if (y == 0 || y == 1) {
-        vertices->bcs[ivert] = 1;
-      }
-      if (x == 0) {
-        vertices->bcs[ivert] = 4;
-      }
-      if (x == 25) {
-        vertices->bcs[ivert] = 2;
-      }
-    }
-    
-  }
 
   PetscFunctionReturn(0);
 }
@@ -1237,7 +1137,6 @@ PetscErrorCode RDyMeshCreateFromDM(RDyApp app, RDyMesh *mesh) {
   PetscCall(RDyCellsCreateFromDM(dm, &mesh->cells));
   PetscCall(RDyEdgesCreateFromDM(dm, &mesh->edges));
   PetscCall(RDyVerticesCreateFromDM(dm, &mesh->vertices));
-  PetscCall(RDyFindBoundaryTypes(mesh,app->sediflag));
   PetscCall(RDyComputeAdditionalEdgeAttributes(dm, mesh));
   PetscCall(RDyComputeAdditionalCellAttributes(mesh));
 
@@ -1281,35 +1180,20 @@ PetscErrorCode RDyMeshDestroy(RDyMesh mesh) {
 PetscErrorCode RDySedAllocateMemory(PetscInt num_cells, PetscInt nsed, RDySed *sed) {
   PetscFunctionBegin;
 
-  PetscCall(RDyAlloc(PetscReal, num_cells, &sed->a0));
-  PetscCall(RDyFill(PetscReal, sed->a0, num_cells, 0.0));
-
-  PetscCall(RDyAlloc(PetscReal, num_cells, &sed->ad));
-  PetscCall(RDyFill(PetscReal, sed->ad, num_cells, 0.0));
-
-  PetscCall(RDyAlloc(PetscReal, num_cells, &sed->F));
-  PetscCall(RDyFill(PetscReal, sed->F, num_cells, 0.0));
-
-  PetscCall(RDyAlloc(PetscReal, num_cells, &sed->OmegaCr));
-  PetscCall(RDyFill(PetscReal, sed->OmegaCr, num_cells, 0.0));
-
-  PetscCall(RDyAlloc(PetscReal, num_cells, &sed->J));
-  PetscCall(RDyFill(PetscReal, sed->J, num_cells, 0.0));
-
-  PetscCall(RDyAlloc(PetscReal, num_cells, &sed->MtS));
-  PetscCall(RDyFill(PetscReal, sed->MtS, num_cells, 0.0));
-
   PetscCall(RDyAlloc(PetscReal, num_cells, &sed->Mt));
   PetscCall(RDyFill(PetscReal, sed->Mt, num_cells, 0.0));
+
+  PetscCall(RDyAlloc(PetscReal, nsed, &sed->M));
+  PetscCall(RDyFill(PetscReal, sed->M, nsed, 0.0));
 
   PetscCall(RDyAlloc(PetscReal, nsed, &sed->vset));
   PetscCall(RDyFill(PetscReal, sed->vset, nsed, 0.0));
 
-  PetscCall(RDyAlloc(PetscReal, nsed, &sed->pi));
-  PetscCall(RDyFill(PetscReal, sed->pi, nsed, 0.0));
+  PetscCall(RDyAlloc(PetscReal, nsed, &sed->tau_ce));
+  PetscCall(RDyFill(PetscReal, sed->tau_ce, nsed, 0.0));
 
-  PetscCall(RDyAlloc(PetscReal, nsed, &sed->Dia));
-  PetscCall(RDyFill(PetscReal, sed->Dia, nsed, 0.0));
+  PetscCall(RDyAlloc(PetscReal, nsed, &sed->tau_cd));
+  PetscCall(RDyFill(PetscReal, sed->tau_cd, nsed, 0.0));
 
   PetscCall(RDyAlloc(PetscReal, num_cells*nsed, &sed->Mi));
   PetscCall(RDyFill(PetscReal, sed->Mi, num_cells*nsed, 0.0));
@@ -1320,26 +1204,14 @@ PetscErrorCode RDySedAllocateMemory(PetscInt num_cells, PetscInt nsed, RDySed *s
   PetscCall(RDyAlloc(PetscReal, num_cells*nsed, &sed->Ei));
   PetscCall(RDyFill(PetscReal, sed->Ei, num_cells*nsed, 0.0));
 
-  PetscCall(RDyAlloc(PetscReal, num_cells*nsed, &sed->Eri));
-  PetscCall(RDyFill(PetscReal, sed->Eri, num_cells*nsed, 0.0));
-
-  PetscCall(RDyAlloc(PetscReal, num_cells*nsed, &sed->Ri));
-  PetscCall(RDyFill(PetscReal, sed->Ri, num_cells*nsed, 0.0));
-
-  PetscCall(RDyAlloc(PetscReal, num_cells*nsed, &sed->Rri));
-  PetscCall(RDyFill(PetscReal, sed->Rri, num_cells*nsed, 0.0));
-
   PetscCall(RDyAlloc(PetscReal, num_cells*nsed, &sed->Di));
   PetscCall(RDyFill(PetscReal, sed->Di, num_cells*nsed, 0.0));
 
   PetscCall(RDyAlloc(PetscReal, num_cells, &sed->Ct));
   PetscCall(RDyFill(PetscReal, sed->Ct, num_cells, 0.0));
 
-  PetscCall(RDyAlloc(PetscReal, num_cells, &sed->Omega));
-  PetscCall(RDyFill(PetscReal, sed->Omega, num_cells, 0.0));
-
-  PetscCall(RDyAlloc(PetscReal, nsed+1, &sed->Soutlet));
-  PetscCall(RDyFill(PetscReal, sed->Soutlet, nsed+1, 0.0));
+  PetscCall(RDyAlloc(PetscReal, num_cells, &sed->tau_b));
+  PetscCall(RDyFill(PetscReal, sed->tau_b, num_cells, 0.0));
 
   PetscFunctionReturn(0);
 }
@@ -1361,12 +1233,14 @@ PetscErrorCode RDySedCreate(DM dm, RDySed *sed, PetscInt sediflag) {
 
   /// Hard coded input for Sediment
   /// TODO: Read input from user provided files 
-  sed->nsed        = 10; 
+  sed->nsed        = 1; 
   sed->rhos        = 2600;
-  sed->h0          = 0.33*0.002;
-  sed->bedporosity = 0.46; 
-  sed->exponent    = 1.0;
-  sed->delta_phi   = 1e-10;
+  sed->bedporosity = 0.4; 
+
+  PetscReal M      = 0.001;
+  PetscReal vset   = 0.01;
+  PetscReal tau_ce = 0.1;
+  PetscReal tau_cd = 1000;
 
   // allocate cell storage
   PetscCall(RDySedAllocateMemory(cEnd - cStart, sed->nsed, sed));
@@ -1374,71 +1248,32 @@ PetscErrorCode RDySedCreate(DM dm, RDySed *sed, PetscInt sediflag) {
   for (PetscInt c = cStart; c < cEnd; c++) {
     PetscInt  icell = c - cStart;
 
-    /// Proffitt: rainfall-induced erosion parameter values
+    /// Mud conservation
     if (sediflag == 1) {
-      sed->a0[icell]      = 412.0;
-      sed->ad[icell]      = 8240.0;
-      sed->F[icell]       = 0;
-      sed->OmegaCr[icell] = 0.0;
-      sed->J[icell]       = 0.0;
-      sed->MtS[icell]     = 0.0515;
+
       sed->Mt[icell]      = 0.0;
 
-      sed->vset[0] = 0.00000350;
-      sed->vset[1] = 0.00007389;
-      sed->vset[2] = 0.00051940;
-      sed->vset[3] = 0.00210000;
-      sed->vset[4] = 0.00680000;
-      sed->vset[5] = 0.02000000;
-      sed->vset[6] = 0.03800000;
-      sed->vset[7] = 0.07500000;
-      sed->vset[8] = 0.16000000;
-      sed->vset[9] = 0.30000000;
+      for (PetscInt j = 0; j < sed->nsed; j++) {
+        sed->M[j] = M;
+        sed->vset[j] = vset;
+        sed->tau_ce[j] = tau_ce;
+        sed->tau_cd[j] = tau_cd; 
+      }
     }
-    else if (sediflag == 2) {
-      /// Beuselinck: flow-induced erosion parameter values
-      sed->a0[icell]      = 0.0;
-      sed->ad[icell]      = 0.0;
-      sed->F[icell]       = 0.01;
-      sed->OmegaCr[icell] = 0.18639;
-      sed->J[icell]       = 0.0;
-      sed->MtS[icell]     = 0.0;
-      sed->Mt[icell]      = 0.0;
-
-      sed->vset[0] = 0.00000043;
-      sed->vset[1] = 0.00000370;
-      sed->vset[2] = 0.00002000;
-      sed->vset[3] = 0.00008300;
-      sed->vset[4] = 0.00023000;
-      sed->vset[5] = 0.00046000;
-      sed->vset[6] = 0.00074000;
-      sed->vset[7] = 0.00110000;
-      sed->vset[8] = 0.00170000;
-      sed->vset[9] = 0.00320000;
-    }
-  }
-
-
-  for (PetscInt j = 0; j < sed->nsed; j++) {
-
-    sed->pi[j]  = 0.1;
-    sed->Dia[j] = 10;
   }
 
   for (PetscInt c = 0; c < cEnd - cStart; c++) {
     PetscInt  icell = c - cStart;
     sed->Ct[icell] = 0.0;
     for (PetscInt j = 0; j < sed->nsed; j++) {
-      sed->Mi[icell*sed->nsed+j] = sed->Mt[c]*sed->pi[j];
+      //sed->Mi[icell*sed->nsed+j] = sed->Mt[c]*sed->pi[j];
+      sed->Mi[icell*sed->nsed+j] = sed->Mt[c];
       sed->Ct[icell] = sed->Ct[icell] + sed->Mi[icell*sed->nsed+j];
     }
   }
 
   //For initially spatially homogeneous depsoited elevation, if nonhomogeneous change the code!
-  sed->iniMeanZ = sed->Mt[0]*sed->rhos;
-
-  PetscCall(RDyAlloc(PetscReal, sed->nsed, &sed->Ci_inflow));
-  PetscCall(RDyFill(PetscReal, sed->Ci_inflow, sed->nsed, 10.0));
+  sed->iniMeanZ = sed->Mt[0]/sed->rhos;
 
   PetscFunctionReturn(0);
 }
@@ -1450,45 +1285,32 @@ PetscErrorCode RDySedCreate(DM dm, RDySed *sed, PetscInt sediflag) {
 PetscErrorCode RDySedDestroy(RDySed sed) {
   PetscFunctionBegin;
 
-  PetscCall(RDyFree(sed.a0));
-  PetscCall(RDyFree(sed.ad));
-  PetscCall(RDyFree(sed.F));
-  PetscCall(RDyFree(sed.OmegaCr));
-  PetscCall(RDyFree(sed.J));
-  PetscCall(RDyFree(sed.MtS));
   PetscCall(RDyFree(sed.Mt));
+  PetscCall(RDyFree(sed.M));
   PetscCall(RDyFree(sed.vset));
-  PetscCall(RDyFree(sed.pi));
-  PetscCall(RDyFree(sed.Dia));
+  PetscCall(RDyFree(sed.tau_ce));
+  PetscCall(RDyFree(sed.tau_cd));
   PetscCall(RDyFree(sed.Mi));
   PetscCall(RDyFree(sed.Ei));
-  PetscCall(RDyFree(sed.Eri));
-  PetscCall(RDyFree(sed.Ri));
-  PetscCall(RDyFree(sed.Rri));
   PetscCall(RDyFree(sed.Di));
   PetscCall(RDyFree(sed.Ct));
-  PetscCall(RDyFree(sed.Omega));
-  PetscCall(RDyFree(sed.Soutlet));
-  PetscCall(RDyFree(sed.Ci_inflow));
+  PetscCall(RDyFree(sed.tau_b));
 
   PetscFunctionReturn(0);
 }
 
-/// @brief compute the stream power(Omega)
+/// @brief compute the bottom shear stress
 /// @param Omega stream power
 /// @param Cd drag coefficient
 /// @param u velocity in x-direction
 /// @param v velocity in y-direction
 /// @return 0 on success, or a non-zero error code on failure
-PetscErrorCode computeSEDohm(RDySed *sed, PetscInt icell, PetscReal Cd, PetscReal u, PetscReal v) {
+PetscErrorCode computeSEDbss(RDySed *sed, PetscInt icell, PetscReal Cd, PetscReal u, PetscReal v) {
   PetscFunctionBeginUser;
 
   PetscReal rhow = 1000.0; ///water density
-  PetscReal vmag = PetscSqrtReal(u*u + v*v);
-  PetscReal Sf   = Cd * (u*u + v*v);
-  //PetscReal ohmx = rhow * (Cd * vmag) * u;
-  //PetscReal ohmy = rhow * (Cd * vmag) * v;
-  sed->Omega[icell] = rhow * Sf * vmag;
+  PetscReal velocity = PetscSqrtReal(u*u + v*v);
+  sed->tau_b[icell] = rhow * Cd * u * velocity;
   
   PetscFunctionReturn(0);
 }
@@ -1497,114 +1319,24 @@ PetscErrorCode computeSEDohm(RDySed *sed, PetscInt icell, PetscReal Cd, PetscRea
 /// @param sed   A pointer to an RDySed that stores allocated data.
 /// @param icell index for cell
 /// @param Ci    array for sediment concentration for icell cell
-/// @param h     water depth for icell cell
-/// @param Pr    precipitation rate in [m/s]
 /// @return 0 on success, or a non-zero error code on failure
-PetscErrorCode computeSEDsource(RDySed *sed, PetscInt icell, PetscReal h, PetscReal Pr) {
+PetscErrorCode computeSEDsource(RDySed *sed, PetscInt icell) {
   PetscFunctionBeginUser;
 
   PetscReal grav = 9.81;         ///gravity
   PetscReal rhow = 1000.0;       ///water density
-  ///PetscReal rhoa = 1.225;     ///air density
-  ///PetscReal visc = 1.0e-6;    ///kinematic visc
   PetscReal rhos    = sed->rhos; ///sediment density 
   PetscReal rhodiff = (1-rhow/rhos)*grav;
   PetscInt  nsed    = sed->nsed;
 
-  PetscReal h0        = sed->h0;       ///From Mutchler and Hansen (1970): threshold,h0=0.33*mean raindrop size; Assume raindrop size=2mm
-  PetscReal exponent  = sed->exponent; ///From Heng et al (2011): clay=0.66; loam=1.13; Assume=1.0
-  PetscReal Fw, H;
-  PetscReal delta_phi = sed->delta_phi;
+  for (PetscInt j=0; j<nsed; j++) {
+    PetscInt index = icell*nsed+j;
 
-  if (sed->Dia[0] < 1.0) {
+    /// erosion rate
+    sed->Ei[index] = sed->M[j] * (sed->tau_b[icell] - sed->tau_ce[j]) / sed->tau_ce[j]; ///[kg/m2/s]
 
-    if (h > h0) { /// NOTE: Proffitt Sediment used constant Fw = 1.0
-      Fw = pow(h0/h,exponent);
-    } else {
-      Fw = 1.0;
-    }
-
-    if (sed->MtS[icell]*Fw < delta_phi) {
-      H = 1.0;
-    } else if (sed->Mt[icell] < delta_phi) {
-      H = 0.0;
-    } else {
-      H = fmin(sed->Mt[icell]/(sed->MtS[icell]*Fw), 1.0);
-    }
-
-    for (PetscInt j=0; j<nsed; j++) {
-      PetscInt index = icell*nsed+j;
-
-      /// detachment rate due to rainfall
-      sed->Ei[index] = Fw*(1-H)*sed->pi[j]*sed->a0[icell]*Pr; ///[kg/m3][m3/s]/[m2]=[kg/m2/s]
-
-      /// redetachment rate due to rainfall
-      if (fabs(sed->Mt[icell]) < delta_phi) {
-        sed->Eri[index] = 0.0;
-      } else {
-        sed->Eri[index] = Fw*H*sed->Mi[index]/sed->Mt[icell]*sed->ad[icell]*Pr; //[kg/m3][m3/s]/[m2]
-      }
-
-      /// entrainment rate due to overland flow
-      if (sed->J[icell] < delta_phi || h < delta_phi || sed->Omega[icell] < sed->OmegaCr[icell]) {
-        sed->Ri[index] = 0.0;
-      } else {
-        sed->Ri[index] = (1.0-H)*sed->pi[j]*sed->F[icell]*(sed->Omega[icell] - sed->OmegaCr[icell])/sed->J[icell]; //[-][kg/s3]/[m2/s2]=[kg/m2/s]
-      }
-
-      /// reentrainment rate due to overland flow
-      if (sed->Mt[icell] < delta_phi || h < delta_phi || sed->Omega[icell] < sed->OmegaCr[icell]) {
-        sed->Rri[index] = 0.0;
-      } else {
-        sed->Rri[index] = H*sed->Mi[index]/sed->Mt[icell]*sed->F[icell]*(sed->Omega[icell] - sed->OmegaCr[icell])/rhodiff/h;   //[-][kg/s3]/[m/s2]/[m]
-      }
-
-      /// deposition rate 
-      sed->Di[index] = sed->vset[j]*sed->Ci[index]; //[m/s][kg/m3]=[kg/m2/s]
-    }
-
-  } else {
-
-    if (sed->MtS[icell] < delta_phi) {
-      H = 1.0;
-    } else if (sed->Mt[icell] < delta_phi) {
-      H = 0.0;
-    } else {
-      H = fmin(sed->Mt[icell]/sed->MtS[icell], 1.0);
-    }
-
-    Fw = 1.0;
-
-    for (PetscInt j=0; j<nsed; j++) {
-      PetscInt index = icell*nsed+j;
-
-      /// detachment rate due to rainfall
-      sed->Ei[index] = Fw*(1-H)*sed->pi[j]*sed->a0[icell]*Pr; ///[kg/m3][m3/s]/[m2]=[kg/m2/s]
-
-      /// redetachment rate due to rainfall
-      if (fabs(sed->Mt[icell]) < delta_phi) {
-        sed->Eri[index] = 0.0;
-      } else {
-        sed->Eri[index] = Fw*H*sed->Mi[index]/sed->Mt[icell]*sed->ad[icell]*Pr; //[kg/m3][m3/s]/[m2]
-      }
-
-      /// entrainment rate due to overland flow
-      if (sed->J[icell] < delta_phi || h < delta_phi || sed->Omega[icell] < sed->OmegaCr[icell]) {
-        sed->Ri[index] = 0.0;
-      } else {
-        sed->Ri[index] = (1.0-H)*sed->pi[j]*sed->F[icell]*(sed->Omega[icell] - sed->OmegaCr[icell])/sed->J[icell]; //[-][kg/s3]/[m2/s2]=[kg/m2/s]
-      }
-
-      /// reentrainment rate due to overland flow
-      if (sed->Mt[icell] < delta_phi || h < delta_phi || sed->Omega[icell] < sed->OmegaCr[icell]) {
-        sed->Rri[index] = 0.0;
-      } else {
-        sed->Rri[index] = H*sed->Mi[index]/sed->Mt[icell]*sed->F[icell]*(sed->Omega[icell] - sed->OmegaCr[icell])/rhodiff/h;   //[-][kg/s3]/[m/s2]/[m]
-      }
-
-      /// deposition rate 
-      sed->Di[index] = sed->vset[j]*sed->Ci[index]; //[m/s][kg/m3]=[kg/m2/s]
-    }
+    /// deposition rate 
+    sed->Di[index] = sed->vset[j] * sed->Ci[index] * ( 1 - sed->tau_b[icell]/sed->tau_cd[j] ); //[m/s][kg/m3]=[kg/m2/s]
   }
 
   PetscFunctionReturn(0);
@@ -1617,128 +1349,42 @@ PetscErrorCode RDyAllocate_IntegerArray_1D(PetscInt **array_1D, PetscInt ndim_1)
   PetscFunctionReturn(0);
 }
 
-/// @brief compuate sediment Mi
+/// @brief compute sediment Mi
 /// @param app An application context
-/// @param N   size of the array
-/// @param h   height of the cell
+/// @param icell  index of the cell 
 /// @return 0 on success, or a non-zero error code on failure
-PetscErrorCode computeSEDMi(RDyApp app, PetscInt icell, const PetscReal h) {
+PetscErrorCode computeSEDMi(RDyApp app, PetscInt icell) {
   PetscFunctionBeginUser;
 
   RDySed   *sed         = &app->sed;
   PetscInt  nsed        = sed->nsed;
   PetscReal dt          = app->dt;
-  PetscReal h0          = sed->h0;
   PetscReal rhos        = sed->rhos;
-  PetscReal exponent    = sed->exponent;
   PetscReal bedporosity = sed->bedporosity;
-  PetscReal delta_phi   = sed->delta_phi;
-  PetscReal Fw;
   PetscReal zc;
 
-  if (sed->Dia[0] < 1.0) {
-    PetscInt seddum = 0;
-    if (h > sed->Dia[nsed-1]) {
-      for (PetscInt j; j < nsed; j++) {
-        PetscInt index = icell*nsed+j;
-        sed->Mi[index] += dt * (sed->Di[index] - sed->Eri[index] - sed->Rri[index]);
-        if (sed->Mi[index] < 0.0) {
-          sed->Mi[index] = 0.0;
-        }
-        zc += dt / rhos / (1-bedporosity) * (sed->Di[index] - sed->Eri[index] - sed->Rri[index] - sed->Ei[index] - sed->Ri[index]);
-      }
-
-    } else if (h <= sed->Dia[0]) {
-      for (PetscInt j = 0; j < nsed; j++) {
-        PetscInt index = icell*nsed+j;
-        if (sed->Mt[icell] < sed->MtS[icell]) {
-          sed->Mi[index] += dt * sed->Ei[index];
-          zc += 0.0;
-        }
-      }
-    }
-
-    while (nsed-1-seddum) {
-      if (h > sed->Dia[nsed-2-seddum] && h <= sed->Dia[nsed-1-seddum]) {
-        for (PetscInt j = 0; j < nsed; j++) {
-          PetscInt index = icell*nsed+j;
-          if (j < nsed - 1 -seddum) {
-            sed->Mi[index] += dt * (sed->Di[index] - sed->Eri[index] - sed->Rri[index]);
-            if (sed->Mi[index] < 0.0) {
-              sed->Mi[index] = 0.0;
-            }
-            zc += dt / rhos / (1-bedporosity) * (sed->Di[index] - sed->Eri[index] - sed->Rri[index] - sed->Ei[index] - sed->Ri[index]);
-          } else {
-            if (sed->Mt[icell] < sed->MtS[icell]) {
-              sed->Mi[index] += dt * sed->Ei[index];
-              zc += 0.0;
-            }
-          }
-        }
-      }
-      seddum++;
-    }
-    if (h > h0) {
-      Fw = pow(h0/h,exponent);
+  for (PetscInt j = 0; j < nsed; j++) {
+    PetscInt index = icell*nsed+j;
+    PetscReal before = sed->Mi[index];
+    sed->Mi[index]  += dt * (sed->Di[index] - sed->Ei[index]);
+    PetscReal after  = sed->Mi[index];
+    if (sed->Mi[index] < 0.0) {
+      /* comment out to compare against tRIBS-FEaST for Proffitt example*/
+      PetscReal weight = fabs(before) / (fabs(before) + fabs(after));
+      sed->Ei[index]  = weight * sed->Ei[index];
+      sed->Di[index]   = sed->Ei[index] - before / dt;
+        
+      sed->Mi[index]   = 0.0;
+      zc              += (dt * (-sed->Ei[index]) - before) / rhos / (1- bedporosity); 
     } else {
-      Fw = 1.0;
-    }
-
-    sed->Mt[icell] = 0.0;
-    for (PetscInt j = 0; j < nsed; j++) {
-      PetscInt index = icell*nsed+j;
-      sed->Mt[icell] += sed->Mi[index];
-    }
-
-    if (sed->Mt[icell] > sed->MtS[icell] * Fw) {
-      for (PetscInt j = 0; j < nsed; j++) {
-        PetscInt index = icell*nsed+j;
-        sed->Mi[index] = sed->Mi[index] / sed->Mt[icell] * sed->MtS[icell] * Fw;
+      zc              += dt / rhos / (1-bedporosity) * (sed->Di[index] - sed->Ei[index]); 
       }
-      sed->Mt[icell] = sed->MtS[icell] * Fw;
-    }
-
-  } else {
-    for (PetscInt j = 0; j < nsed; j++) {
-      PetscInt index = icell*nsed+j;
-      if (h > delta_phi) {
-        PetscReal before = sed->Mi[index];
-        ///sed->Di[index]   = sed->vset[j] * sed->Ci[index];
-        sed->Mi[index]  += dt * (sed->Di[index] - sed->Eri[index] - sed->Rri[index]);
-        PetscReal after  = sed->Mi[index];
-        if (sed->Mi[index] < 0.0) {
-          /* comment out to compare against tRIBS-FEaST for Proffitt example*/
-          PetscReal weight = fabs(before) / (fabs(before) + fabs(after));
-          sed->Eri[index]  = weight * sed->Eri[index];
-          sed->Rri[index]  = weight * sed->Rri[index];
-          sed->Di[index]   = sed->Eri[index] + sed->Rri[index] - before / dt;
-          
-          sed->Mi[index]   = 0.0;
-          zc              += (dt * (-sed->Ei[index] - sed->Ri[index]) - before) / rhos / (1- bedporosity); 
-        } else {
-          zc              += dt / rhos / (1-bedporosity) * (sed->vset[j]*sed->Ci[index] - sed->Eri[index] - sed->Rri[index] - sed->Ei[index] - sed->Ri[index]); 
-        }
-      } else {
-        sed->Mi[index]  += dt * sed->Ei[index]; // sMi[i][j] += dtc[i]*(sEi[i][j] + sEri[i][j]);   //Splash erosion
-        zc              += 0.0;
-      }
-    }/// for loop for sed
-    sed->Mt[icell] = 0.0;
-    for (PetscInt j = 0; j < nsed; j++) {
-      PetscInt index = icell*nsed+j;
-      sed->Mt[icell] += sed->Mi[index];
-    }
-
-    /*
-    if (sed->Mt[icell] > sed->MtS[icell]) {
-      for (PetscInt j = 0; j < nsed; j++) {
-        PetscInt index = icell*nsed+j;
-        sed->Mi[index] = sed->Mi[index]/ sed->Mt[icell]  * sed->MtS[icell];
-      }
-      sed->Mt[icell] = sed->MtS[icell];
-    }
-    */
-  } 
+  }/// for loop for sed
+  sed->Mt[icell] = 0.0;
+  for (PetscInt j = 0; j < nsed; j++) {
+    PetscInt index = icell*nsed+j;
+    sed->Mt[icell] += sed->Mi[index];
+  }
 
   PetscFunctionReturn(0);
 }
@@ -1760,15 +1406,12 @@ static PetscErrorCode ProcessOptions(MPI_Comm comm, RDyApp app) {
   app->tiny_h     = 1e-10;
   app->ndof       = 3;
   app->mannings_n = 0.015;
-  app->Qoutlet    = 0.0;
   app->sediflag   = 0;
 
   MPI_Comm_size(app->comm, &app->comm_size);
   MPI_Comm_rank(app->comm, &app->rank);
 
   app->output_path_max_len = PETSC_MAX_PATH_LEN * 2;
-  app->ic_opt = 0;
-  app->h_ic   = 0.002;
 
   PetscOptionsBegin(app->comm, NULL, "2D Mesh Options", "");
   {
@@ -1776,8 +1419,6 @@ static PetscErrorCode ProcessOptions(MPI_Comm comm, RDyApp app) {
     PetscCall(PetscOptionsInt("-Ny", "Number of cells in Y", "", app->Ny, &app->Ny, NULL));
     PetscCall(PetscOptionsInt("-Nt", "Number of time steps", "", app->Nt, &app->Nt, NULL));
     PetscCall(PetscOptionsReal("-dx", "dx", "", app->dx, &app->dx, NULL));
-    PetscCall(PetscOptionsInt("-ic", "ic", "", app->ic_opt, &app->ic_opt, NULL));
-    PetscCall(PetscOptionsReal("-h_ic", "h_ic", "", app->h_ic, &app->h_ic, NULL));
     PetscCall(PetscOptionsReal("-dy", "dy", "", app->dy, &app->dy, NULL));
     PetscCall(PetscOptionsReal("-hu", "hu", "", app->hu, &app->hu, NULL));
     PetscCall(PetscOptionsReal("-hd", "hd", "", app->hd, &app->hd, NULL));
@@ -1787,9 +1428,6 @@ static PetscErrorCode ProcessOptions(MPI_Comm comm, RDyApp app) {
     PetscCall(PetscOptionsBool("-use_critical_flow_bc", "Use critical flow BC", "", app->use_critical_flow_bc, &app->use_critical_flow_bc, NULL));
     PetscCall(
         PetscOptionsBool("-use_prescribed_head_bc", "Use prescribed head BC", "", app->use_prescribed_head_bc, &app->use_prescribed_head_bc, NULL));
-    PetscCall(PetscOptionsBool("-use_soft_boundary_bc","Use soft boundary BC","", app->use_soft_boundary_bc,   &app->use_soft_boundary_bc,   NULL));
-    PetscCall(
-        PetscOptionsBool("-use_prescribed_inflow_bc","Use prescribed inflow BC","", app->use_prescribed_inflow_bc, &app->use_prescribed_inflow_bc,NULL));
     PetscCall(PetscOptionsString("-boundary_edge_type_file", "The boundary edge type file", "ex2.c", app->boundary_edge_type_file,
                                  app->boundary_edge_type_file, PETSC_MAX_PATH_LEN, NULL));
     PetscCall(PetscOptionsBool("-debug", "debug", "", app->debug, &app->debug, NULL));
@@ -1803,14 +1441,10 @@ static PetscErrorCode ProcessOptions(MPI_Comm comm, RDyApp app) {
   }
   PetscOptionsEnd();
 
-  if (app->ic_opt > 2) {
-    SETERRQ(PETSC_COMM_WORLD, PETSC_ERR_USER, "IC option larger than 1 is not availalbe!");
-  }
-
   if (app->use_critical_flow_bc && app->use_prescribed_head_bc) {
     SETERRQ(PETSC_COMM_WORLD, PETSC_ERR_USER, "Both -use_critical_flow_bc and -use_prescribed_head_bc can not be specified.");
   }
-  if (app->use_critical_flow_bc || app->use_prescribed_head_bc || app->use_soft_boundary_bc) {
+  if (app->use_critical_flow_bc || app->use_prescribed_head_bc) {
     size_t len;
     PetscStrlen(app->boundary_edge_type_file, &len);
     if (!len) {
@@ -1828,25 +1462,6 @@ static PetscErrorCode ProcessOptions(MPI_Comm comm, RDyApp app) {
   PetscReal max_time = app->Nt * app->dt;
   PetscPrintf(app->comm, "Max simulation time is %f\n", max_time);
 
-  char fname[app->output_path_max_len];
-  sprintf(fname, "outputs/%s_rank%d.Qoutlet", app->output_prefix, app->rank);
-
-  if (fopen(fname,"r")) {
-    remove(fname);
-  } 
-  app->fq = fopen(fname,"a");
-
-  sprintf(fname, "outputs/%s_rank%d.Soutlet", app->output_prefix, app->rank);
-
-  if (fopen(fname,"r")) {
-    remove(fname);
-  } 
-  app->fs = fopen(fname,"a");
-
-  /// Hard code inflow information. TODO: read from file
-  app->eta_inflow = 10.4;
-  app->Q_inflow   = 0.00125; /// [m^3/s]
-
   PetscFunctionReturn(0);
 }
 
@@ -1857,7 +1472,7 @@ static PetscErrorCode CreateDM(RDyApp app) {
   PetscFunctionBegin;
 
   /// TODO: Read from input file
-  PetscInt nsed = 10;
+  PetscInt nsed = 1;
   size_t len;
 
   PetscStrlen(app->mesh_file, &len);
@@ -2022,30 +1637,20 @@ static PetscErrorCode SetInitialCondition(RDyApp app, Vec X) {
 
   PetscCall(VecZeroEntries(X));
 
-  if (app->ic_opt == 1) {
-    PetscScalar *x_ptr;
-    VecGetArray(X, &x_ptr);
+  PetscScalar *x_ptr;
+  VecGetArray(X, &x_ptr);
 
-    for (PetscInt icell = 0; icell < mesh->num_cells_local; icell++) {
-      PetscInt ndof = app->ndof;
-      PetscInt idx  = icell * ndof;
-      if (cells->centroids[icell].X[1] < 95.0) {
-        x_ptr[idx] = app->hu;
-      } else {
-        x_ptr[idx] = app->hd;
+  for (PetscInt icell = 0; icell < mesh->num_cells_local; icell++) {
+    PetscInt ndof = app->ndof;
+    PetscInt idx  = icell * ndof;
+    if (cells->centroids[icell].X[1] < 95.0) {
+      x_ptr[idx] = app->hu;
+    } else {
+      x_ptr[idx] = app->hd;
       }
-    }
-
-    VecRestoreArray(X, &x_ptr);
-  } else if (app->ic_opt == 2) {
-    PetscScalar *x_ptr;
-    VecGetArray(X, &x_ptr);
-    for (PetscInt icell = 0; icell < mesh->num_cells_local; icell++) {
-      PetscInt ndof = app->ndof;
-      PetscInt idx  = icell * ndof;
-      x_ptr[idx] = app->h_ic;
-    }
   }
+
+  VecRestoreArray(X, &x_ptr);
   
   PetscFunctionReturn(0);
 }
@@ -2189,8 +1794,7 @@ PetscErrorCode MarkBoundaryEdgeType(RDyApp app) {
   for (PetscInt icell = 0; icell < mesh->num_cells; icell++) {
     // Is a boundary condition being applied on the cell?
     if ((PetscInt)local_ptr[icell] == PRESCRIBED_HEAD  || 
-        (PetscInt)local_ptr[icell] == CRITICAL_OUTFLOW ||
-        (PetscInt)local_ptr[icell] == SOFT_BOUNDARY) {
+        (PetscInt)local_ptr[icell] == CRITICAL_OUTFLOW) {
       PetscBool edge_found = PETSC_FALSE;
 
       // Loop over all boundary edges to identify the corresponding edge
@@ -2696,27 +2300,7 @@ PetscErrorCode RHSFunctionForBoundaryEdges(RDyApp app, Vec F, PetscReal *amax_va
           }
 
           break;
-        case SOFT_BOUNDARY:
-          // Note: This boundary condition for outlet is applied in tRIBS sediment, while
-          //       tRIBS dynamic applies the CRITICAL_OUTFLOW condtion
-          hr_vec_bnd[ii] = hl_vec_bnd[ii];
-          ur_vec_bnd[ii] = ul_vec_bnd[ii];
-          vr_vec_bnd[ii] = vl_vec_bnd[ii];
-          for (PetscInt jj = 0; jj < ndof-3; jj++) {
-            Cir_vec_bnd[ii][jj] = Cil_vec_bnd[ii][jj];
-          }
 
-          break;
-        case INFLOW_BOUNDARY:
-          // PetscReal edgeLen = edges->lengths[iedge];
-          hr_vec_bnd[ii]    = 0.0;//app->eta_inflow - (z1+z2)/2.0; /// Assuming water height = water level - bottol elevation 
-          ur_vec_bnd[ii]    = 0.0;//app->Q_inflow/edgeLen/hr_vec_bnd[ii] * cn_vec_bnd[ii];
-          vr_vec_bnd[ii]    = 0.0;//app->Q_inflow/edgeLen/hr_vec_bnd[ii] * sn_vec_bnd[ii];
-          for (PetscInt jj = 0; jj < ndof-3; jj++) {
-            Cir_vec_bnd[ii][jj] = 0.0;//sed->Ci_inflow[jj];
-          }
-
-          break;
         default:
           SETERRQ(PETSC_COMM_WORLD, PETSC_ERR_USER, "Unsupported boundary edge type");
           break;
@@ -2728,31 +2312,9 @@ PetscErrorCode RHSFunctionForBoundaryEdges(RDyApp app, Vec F, PetscReal *amax_va
   PetscCall(solver(num, ndof, hl_vec_bnd, hr_vec_bnd, ul_vec_bnd, ur_vec_bnd, vl_vec_bnd, vr_vec_bnd, 
             Cil_vec_bnd, Cir_vec_bnd, sn_vec_bnd, cn_vec_bnd, flux_vec_bnd, amax_vec_bnd));
 
-  if (app->use_prescribed_inflow_bc) {
-    for (PetscInt j = 0; j < mesh->num_boundary_edges; j++) {
-      if (edges->boundary_edge_types[j] == INFLOW_BOUNDARY) {
-        flux_vec_bnd[j][0] = -app->Q_inflow/1.0;
-        flux_vec_bnd[j][1] = 0.0;
-        flux_vec_bnd[j][2] = 0.0;
-        for (PetscInt jj = 0; jj < sed->nsed; jj++) {
-          flux_vec_bnd[j][3+jj] = flux_vec_bnd[j][0]*sed->Ci_inflow[jj];
-        }
-      }
-    }
-  }
 
   PetscInt qstep = (PetscInt) 60.0/app->dt;
-  if (app->sediflag == 1) {
-    qstep = (PetscInt) 60.0/app->dt;
-  }
-  else if (app->sediflag == 2) {
-    qstep = (PetscInt) 1.0/app->dt;
-  }
 
-  app->Qoutlet = 0.0;
-  for (PetscInt j = 0; j < sed->nsed+1; j++) {
-    sed->Soutlet[j] = 0.0;
-  }
   // Save the flux values in the Vec based by TS
   for (PetscInt ii = 0; ii < mesh->num_boundary_edges; ii++) {
     PetscInt  iedge      = edges->boundary_edge_ids[ii];
@@ -2766,31 +2328,15 @@ PetscErrorCode RHSFunctionForBoundaryEdges(RDyApp app, Vec F, PetscReal *amax_va
 
       PetscReal hl = x_ptr[l * ndof + 0];
 
-      if (!(hl < app->tiny_h) || edges->boundary_edge_types[ii] == INFLOW_BOUNDARY) {
+      if (!(hl < app->tiny_h)) {
         *amax_value  = fmax(*amax_value, amax_vec_bnd[ii]);
         *crmax_value = fmax(*crmax_value, amax_vec_bnd[ii] * edgeLen / areal * app->dt);
 
         for (PetscInt idof = 0; idof < ndof; idof++) {
           f_ptr[l * ndof + idof] -= flux_vec_bnd[ii][idof] * edgeLen / areal;
         }
-
-        if (edges->boundary_edge_types[ii] == CRITICAL_OUTFLOW || edges->boundary_edge_types[ii] == SOFT_BOUNDARY) {
-          app->Qoutlet += flux_vec_bnd[ii][0] * edgeLen;
-          for (PetscInt j = 0; j < sed->nsed; j++) {
-            sed->Soutlet[j]         += flux_vec_bnd[ii][j+3] * edgeLen;
-            sed->Soutlet[sed->nsed] += flux_vec_bnd[ii][j+3] * edgeLen;
-          }
-        }
       }
     }
-  }
-  if ((app->tstep - 1) % qstep == 0) {
-    fprintf(app->fq,"%f\t%f\n",(app->tstep-1)*app->dt,app->Qoutlet);
-    fprintf(app->fs,"%f\t",(app->tstep-1)*app->dt);
-    for (PetscInt j = 0; j < sed->nsed; j++) {
-      fprintf(app->fs,"%f\t",sed->Soutlet[j]);
-    }
-    fprintf(app->fs,"%f\n",sed->Soutlet[sed->nsed]);
   }
 
   // Restore vectors
@@ -2854,15 +2400,6 @@ PetscErrorCode AddSourceTerm(RDyApp app, Vec F) {
       PetscReal tbx = 0.0, tby = 0.0;
       PetscReal Di[sed->nsed];
 
-      ///PetscReal Pr = 100.0/1000.0*cells->areas[icell]/3600;
-      PetscReal Pr;
-      if (app->sediflag == 1) {
-        Pr = 100.0/1000.0/3600.0;
-      }
-      else if (app->sediflag == 2) {
-        Pr = 0.0;
-      }
-
       if (h >= app->tiny_h) {
         // Cd = g n^2 h^{-1/3}, where n is Manning's coefficient
         PetscReal Cd = GRAVITY * Square(app->mannings_n) * PetscPowReal(h, -1.0 / 3.0);
@@ -2882,13 +2419,15 @@ PetscErrorCode AddSourceTerm(RDyApp app, Vec F) {
           sed->Ci[index] = x_ptr[icell * ndof + 3 + j] / h;
         }
 
-        PetscCall(computeSEDMi(app, icell, h));
-        PetscCall(computeSEDohm(sed,icell,Cd,u,v));
-        PetscCall(computeSEDsource(sed,icell,h,Pr));
+        PetscCall(computeSEDMi(app, icell));
+        PetscCall(computeSEDbss(sed,icell,Cd,u,v));
+        PetscCall(computeSEDsource(sed,icell));
 
+        /*
         for (PetscInt j = 0; j < sed->nsed; j++) {
           PetscInt index = icell*nsed+j;
-          sed->Di[index] = (x_ptr[icell * ndof + 3 + j] + dt*f_ptr[icell * ndof + 3 + j] + dt*(sed->Ei[index] + sed->Eri[index] + sed->Ri[index] + sed->Rri[index]))*sed->vset[j]/(h+dt*sed->vset[j]);
+          sed->Di[index] = (x_ptr[icell * ndof + 3 + j] + dt*f_ptr[icell * ndof + 3 + j] + dt*(sed->Ei[index]))*sed->vset[j]/(h+dt*sed->vset[j]);
+        */
           /*
           For debug purpose
           if (icell == 2493 && j == 0) {
@@ -2901,7 +2440,9 @@ PetscErrorCode AddSourceTerm(RDyApp app, Vec F) {
             ///SETERRQ(PETSC_COMM_WORLD, PETSC_ERR_USER, "debug sediment.");
           }
           */
+        /*
         }
+        */
 
       } else { 
         for (PetscInt j = 0; j < nsed; j++) {
@@ -2910,40 +2451,26 @@ PetscErrorCode AddSourceTerm(RDyApp app, Vec F) {
           x_ptr[icell * ndof + 3 + j] = 0.0;
           Di[j] =  0.0;
           sed->Di[index] = 0.0;
+          sed->Ei[index] = 0.0;
         }
-        sed->Omega[icell] = 0.0;
-        PetscCall(computeSEDMi(app, icell, h));
-        PetscCall(computeSEDsource(sed,icell,h,Pr));
+        PetscCall(computeSEDMi(app, icell));
         
       }
 
-      f_ptr[icell * ndof + 0] += Pr;
+      f_ptr[icell * ndof + 0] += 0.0;
       f_ptr[icell * ndof + 1] += -bedx - tbx;
       f_ptr[icell * ndof + 2] += -bedy - tby;
 
-      if (sed->Dia[0] < 1.0) {
-        for (PetscInt j = 0; j < nsed; j++) {
-          PetscInt index = icell*nsed+j;
-          if (h >= app->tiny_h) {
-            f_ptr[icell * ndof + 3 + j] += sed->Ei[index] + sed->Eri[index] + sed->Ri[index] + sed->Rri[index];
-            f_ptr[icell * ndof + 3 + j] -= Di[j];
-          } else {
-            f_ptr[icell * ndof + 3 + j] = 0.0;
-          }
-          
-        }
-      } else {
-        for (PetscInt j = 0; j < nsed; j++) {
-          PetscInt index = icell*nsed+j;
-          if (h >= app->tiny_h) {
-            f_ptr[icell * ndof + 3 + j] += sed->Ei[index] + sed->Eri[index] + sed->Ri[index] + sed->Rri[index];
-            f_ptr[icell * ndof + 3 + j] -= sed->Di[index];
-            /// keep 7 decimal digits in ci. FIXME: double check how to fix it.
-            /// Note: Will have numerical issue without the following line.
-            f_ptr[icell * ndof + 3 + j] = ceil(f_ptr[icell * ndof + 3 + j] * 10000000.0) / 10000000.0;
-          } else {
-            f_ptr[icell * ndof + 3 + j] = 0.0; 
-          }
+      for (PetscInt j = 0; j < nsed; j++) {
+        PetscInt index = icell*nsed+j;
+        if (h >= app->tiny_h) {
+          f_ptr[icell * ndof + 3 + j] += sed->Ei[index];
+          f_ptr[icell * ndof + 3 + j] -= sed->Di[index];
+          /// keep 7 decimal digits in ci. FIXME: double check how to fix it.
+          /// Note: Will have numerical issue without the following line.
+          f_ptr[icell * ndof + 3 + j] = ceil(f_ptr[icell * ndof + 3 + j] * 10000000.0) / 10000000.0;
+        } else {
+          f_ptr[icell * ndof + 3 + j] = 0.0; 
         }
       }
 
@@ -3089,7 +2616,7 @@ int main(int argc, char **argv) {
     PetscCall(AddBuildings(app));
   }
 
-  if (app->use_critical_flow_bc || app->use_prescribed_head_bc || app->use_soft_boundary_bc) {
+  if (app->use_critical_flow_bc || app->use_prescribed_head_bc) {
     PetscCall(MarkBoundaryEdgeType(app));
   }
 
@@ -3137,8 +2664,6 @@ int main(int argc, char **argv) {
   if (app->sediflag > 0) {
     PetscCall(RDySedDestroy(app->sed));
   }
-  fclose(app->fq);
-  fclose(app->fs);
   PetscCall(DMDestroy(&app->auxdm));
   PetscCall(DMDestroy(&app->dm));
   PetscCall(RDyFree(app));
