@@ -41,8 +41,8 @@ base_yc = mean(yv_2d(base_cells),2);
 
 % create a mask for active/inactive cells
 mask = ones(nx,ny);
-% loc = find(base_xc > 4 & base_xc < 6 & base_yc > 4 & base_yc < 5); mask(loc) = 0;
-% loc = find(base_xc > 4 & base_xc < 6 & base_yc > 0 & base_yc < 2); mask(loc) = 0;
+loc = find(base_xc > 4 & base_xc < 6 & base_yc > 4 & base_yc < 5); mask(loc) = 0;
+loc = find(base_xc > 4 & base_xc < 6 & base_yc > 0 & base_yc < 2); mask(loc) = 0;
 
 if (nx == 5 && ny == 4)
     mask(2,[1 3 4]) = 0;
@@ -285,7 +285,7 @@ orientation(loc) = -1;       % set -1 for the faces
 % 5. vertex coordinates
 vertices = [xv_new yv_new]';
 
-out_fname = sprintf('dam_break_%dx%d.h5',nx,ny);
+out_fname = sprintf('DamBreak_grid%dx%d.h5',nx,ny);
 disp(out_fname);
 
-write_h5mesh_file(out_fname, vertices, cells, cones, order, orientation);
+write_h5mesh_file(out_fname, vertices, cells, cones, order, orientation, ncells);
