@@ -54,6 +54,9 @@ loc_valid_cells = find(mask == 1);
 ncells = length(loc_valid_cells);
 fprintf('ncells    = %d\n',ncells);
 
+xc = base_xc(loc_valid_cells);
+yc = base_yc(loc_valid_cells);
+
 % map the cells from base to new mesh
 cell_id_base2new = mask*0;
 cell_id_base2new(loc_valid_cells) = [1:ncells];
@@ -288,4 +291,8 @@ vertices = [xv_new yv_new]';
 out_fname = sprintf('DamBreak_grid%dx%d.h5',nx,ny);
 disp(out_fname);
 
-write_h5mesh_file(out_fname, vertices, cells, cones, order, orientation, ncells);
+loc = find(xc <  4); cell_sets(1).indices = loc - 1;
+loc = find(xc >= 4); cell_sets(2).indices = loc - 1;
+
+
+write_h5mesh_file(out_fname, vertices, cells, cones, order, orientation, cell_sets);
