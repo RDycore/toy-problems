@@ -89,3 +89,20 @@ Malpasset Dam break (PIHM grid)
 ```
 mpiexec -n 160 ./ex2b_validation -savef true -output_prefix ex2b_malpasset_pihm -mesh ../share/meshes/ex2b_malpasset_pihm.exo -initial_condition ../share/initial_conditions/ex2b_malpasset_pihm.IC -mannings_n 0.033 -dt 0.001 -ts_max_time 4000 -caseid 5.2
 ```
+
+## Run MMS simulations for SWE and sediment
+
+```
+suffixes=("1" "0.5" "0.25" "0.1" "0.05")
+for suffix in "${suffixes[@]}"
+do
+  mpiexec -n 2 \
+  ./ex2d_MMS \
+  -savef true \
+  -output_prefix MMS_dx${suffix} \
+  -mesh ../share/meshes/ex2b_MMS_mesh_dx${suffix}.exo \
+  -sed 1 \
+  -dt 0.01 \
+  -ts_max_time 5.0
+done
+```
