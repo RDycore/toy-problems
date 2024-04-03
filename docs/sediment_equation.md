@@ -1,5 +1,6 @@
 ## Governing equations
 
+### 2-D H-R equation
 The 2-D H-R equations are
 
 \begin{equation}
@@ -159,6 +160,52 @@ $\mathbf{S}$ is the source vector, $\mathbf{M}$ is a deposited mass vector, and 
     \end{bmatrix}
 \end{align}
 
+### TELEMAC/GAIA equations
+
+The sediment transport equations implemented in TELEMAC/GAIA are
+
+\begin{equation}
+\label{eqn:sd2d}
+\frac{\partial hc_{i}}{\partial t}+\frac{\partial uhc_{i}}{\partial x} + \frac{\partial vhc_{i}}{\partial y} = E_{i} - D_{i},
+\end{equation}
+
+where $h$, $u$ and $v$ are water depth, velocities in horizontal and vertical directions, respectively, $i = 1, 2, \dots I$ is the sediment class, $c_{i}$ is the sediment concentration given as mass per unit volume $[M/L^{3}]$, 
+$I$ is the number of sediment size classes, and $E_{i}$ and $D_{i}$ are erosion and deposition rate formulated as mass per unit area per unit time $[M/L^{2}/T]$.
+
+According to GAIA, the erosion and deposition rates are calculated as:
+\begin{equation}
+E_i = M \left( \frac{\tau_b - \tau_{ce}}{\tau_{ce}} \right),
+\end{equation}
+\begin{equation}
+D_i = w c_i \left[ 1 - \left( \frac{\tau_b}{\tau_{cd}} \right) \right],
+\end{equation}
+
+where, for each sediment class $i$, $M$ is the Krone-Partheniades erosion law constant [kg/m$^{2}$], or the erodibility coefficient, $w$ is the settling velocity for sediment class $i$ (m/s), $\tau_{ce}$ is critical shear stress for erosion (N/m$^2$), $\tau_{cd}$ is critical shear stress for deposition (N/m$^2$), $\tau_b = \rho C_D u\sqrt{u^2+v^2}$ is the bottom shear stress. 
+
+Coupling sediment transport equation with Shallow Water Equations lead to:
+
+\begin{equation}
+\frac{\partial \mathbf{U}}{\partial t} + \frac{\partial \mathbf{E}}{\partial t} + \frac{\partial \mathbf{G}}{\partial t} = \mathbf{S},
+\end{equation}
+
+where $\mathbf{U}$ is the conservative variable vector, $\mathbf{E}$ and $\mathbf{G}$ are the flux vectors in x and y direction. $\mathbf{U}$, $\mathbf{E}$ and $\mathbf{G}$ are same as those in 2-D H-R equation. $\mathbf{S}$ is the source vector:
+
+
+\begin{align}
+\mathbf{S} 
+=
+    \begin{bmatrix}
+    S_{r}                                                           \\[.5em]
+    -gh\frac{\partial z_{b}}{\partial x} - C_{D}u\sqrt{u^{2}+v^{2}} \\[.5em]
+    -gh\frac{\partial z_{b}}{\partial y} - C_{D}v\sqrt{u^{2}+v^{2}} \\
+    E_{1}-D_{1}                                 \\
+    \vdots                                                          \\
+    E_{I}-D_{I} 
+    \end{bmatrix}
+\end{align}
+
+
+
 ## Spatial discretization
 
 Integrating equation Eq (\ref{eqn:cpeqns}) over an arbitrary two-dimensional computational element $A$ with a boundary $\Gamma$, then the 
@@ -275,8 +322,13 @@ where $\Delta \lambda = 4(\lambda_{R}-\lambda_{L})$
 
 ## Source term
 
-Please refer to shallow_water_equation.md. For the sediment source:
+Please refer to shallow_water_equation.md. The H-R sediment source is
 
 \begin{equation}
 (e_{i}+e_{ri}+r_{i}+r_{ri}-d_{i})A
+\end{equation}
+
+The sediment source in GAIA is 
+\begin{equation}
+(E_{i}-D_{i})A
 \end{equation}
