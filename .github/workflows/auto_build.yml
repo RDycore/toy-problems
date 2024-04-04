@@ -49,3 +49,5 @@ jobs:
         make ex2c
         mpiexec -n 3 ./ex2c -savef true -output_prefix proffitt -mesh ../share/meshes/proffitt.exo -dt 0.05 -Nt 100 -sed 1 -mannings_n 0.06 -ic 2 -h_ic 0.01
         mpiexec -n 3 ./ex2c -savef true -output_prefix beuselinck -mesh ../share/meshes/beuselinck.exo -dt 0.005 -Nt 100 -sed 2 -mannings_n 0.01 -ic 2 -h_ic 0.0 -use_prescribed_inflow_bc true
+        make ex2d_MMS
+        mpiexec -n 2 ./ex2d_MMS -savef true -output_prefix MMS_dx1 -mesh ../share/meshes/ex2b_MMS_mesh_dx1.exo -sed 1 -dt 0.01 -ts_max_time 5.0
