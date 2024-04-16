@@ -1,4 +1,4 @@
-static char help[] = "Partial 2D dam break problem.\n";
+static char help[] = "Partial 2D dam break problem with implicit solver for friction term.\n";
 
 #include <assert.h>
 #include <math.h>
@@ -1101,13 +1101,14 @@ struct _n_RDyApp {
 
   PetscInt  ndof;
   Vec       B, localB;
-  Vec       localX;
+  Vec       localX, localUdot;
   PetscBool debug, savet, savef, add_building;
   PetscBool interpolate;
 
   char      boundary_edge_type_file[PETSC_MAX_PATH_LEN];
   PetscBool use_critical_flow_bc;
   PetscBool use_prescribed_head_bc;
+  PetscBool jacobian_analytic;
 
   /// mesh representing simulation domain
   RDyMesh mesh;
@@ -1140,6 +1141,7 @@ static PetscErrorCode ProcessOptions(MPI_Comm comm, RDyApp app) {
   app->tiny_h     = 1e-7;
   app->ndof       = 3;
   app->mannings_n = 0.015;
+  app->jacobian_analytic = PETSC_FALSE;
 
   MPI_Comm_size(app->comm, &app->comm_size);
   MPI_Comm_rank(app->comm, &app->rank);
@@ -1168,6 +1170,7 @@ static PetscErrorCode ProcessOptions(MPI_Comm comm, RDyApp app) {
                                  app->initial_condition_file, PETSC_MAX_PATH_LEN, NULL));
     PetscCall(PetscOptionsString("-output_prefix", "Output prefix", "ex2.c", app->output_prefix, app->output_prefix, PETSC_MAX_PATH_LEN, NULL));
     PetscCall(PetscOptionsReal("-mannings_n", "mannings_n", "", app->mannings_n, &app->mannings_n, NULL));
+    PetscCall(PetscOptionsBool("-jacobian_analytic", "Jacobian Analytic", "", app->jacobian_analytic, &app->jacobian_analytic, NULL));
   }
   PetscOptionsEnd();
 
@@ -1219,9 +1222,9 @@ static PetscErrorCode CreateDM(RDyApp app) {
   if (!len) {
     PetscStrlen(app->mesh_file, &len);
     if (!len) {
-      sprintf(app->output_prefix, "ex2b_output");
+      sprintf(app->output_prefix, "ex2e_output");
     } else {
-      sprintf(app->output_prefix, "ex2b_Nx_%d_Ny_%d", app->Nx, app->Ny);
+      sprintf(app->output_prefix, "ex2e_Nx_%d_Ny_%d", app->Nx, app->Ny);
     }
   }
 
@@ -1356,7 +1359,7 @@ static PetscErrorCode SetInitialCondition(RDyApp app, Vec X) {
   for (PetscInt icell = 0; icell < mesh->num_cells_local; icell++) {
     PetscInt ndof = app->ndof;
     PetscInt idx  = icell * ndof;
-    if (cells->centroids[icell].X[1] < 0.475 * app->Lx) {
+    if (cells->centroids[icell].X[1] < 0.475*app->Lx) {
       x_ptr[idx] = app->hu;
     } else {
       x_ptr[idx] = app->hd;
@@ -1979,29 +1982,29 @@ PetscErrorCode AddSourceTerm(RDyApp app, Vec F) {
       PetscReal u = u_vec[icell];
       PetscReal v = v_vec[icell];
 
-      PetscReal Fsum_x = f_ptr[icell * ndof + 1];
-      PetscReal Fsum_y = f_ptr[icell * ndof + 2];
-
-      PetscReal tbx = 0.0, tby = 0.0;
-
-      if (h >= app->tiny_h) {
-        // Cd = g n^2 h^{-1/3}, where n is Manning's coefficient
-        PetscReal Cd = GRAVITY * Square(app->mannings_n) * PetscPowReal(h, -1.0 / 3.0);
-
-        PetscReal velocity = PetscSqrtReal(Square(u) + Square(v));
-
-        PetscReal tb = Cd * velocity / h;
-
-        PetscReal dt     = app->dt;
-        PetscReal factor = tb / (1.0 + dt * tb);
-
-        tbx = (hu + dt * Fsum_x - dt * bedx) * factor;
-        tby = (hv + dt * Fsum_y - dt * bedy) * factor;
-      }
+      //PetscReal Fsum_x = f_ptr[icell * ndof + 1];
+      //PetscReal Fsum_y = f_ptr[icell * ndof + 2];
+//
+      //PetscReal tbx = 0.0, tby = 0.0;
+//
+      //if (h >= app->tiny_h) {
+      //  // Cd = g n^2 h^{-1/3}, where n is Manning's coefficient
+      //  PetscReal Cd = GRAVITY * Square(app->mannings_n) * PetscPowReal(h, -1.0 / 3.0);
+//
+      //  PetscReal velocity = PetscSqrtReal(Square(u) + Square(v));
+//
+      //  PetscReal tb = Cd * velocity / h;
+//
+      //  PetscReal dt     = app->dt;
+      //  PetscReal factor = tb / (1.0 + dt * tb);
+//
+      //  tbx = (hu + dt * Fsum_x - dt * bedx) * factor;
+      //  tby = (hv + dt * Fsum_y - dt * bedy) * factor;
+      //}
 
       f_ptr[icell * ndof + 0] += 0.0;
-      f_ptr[icell * ndof + 1] += -bedx - tbx;
-      f_ptr[icell * ndof + 2] += -bedy - tby;
+      f_ptr[icell * ndof + 1] += -bedx;
+      f_ptr[icell * ndof + 2] += -bedy;
     }
   }
 
@@ -2012,6 +2015,171 @@ PetscErrorCode AddSourceTerm(RDyApp app, Vec F) {
   PetscFunctionReturn(0);
 }
 
+/// @brief It is the IFunction called by TS
+/// @param [in] ts A TS struct
+/// @param [in] t Time
+/// @param [in] X A global solution Vec
+/// @param [inout] F A global flux Vec
+/// @param [inout] ptr A user-defined pointer
+/// @return 0 on success, or a non-zero error code on failure
+PetscErrorCode IFunction(TS ts, PetscReal t, Vec X, Vec Udot, Vec F, void *ptr) {
+  PetscFunctionBeginUser;
+
+  RDyApp app = ptr;
+  DM     dm  = app->dm;
+
+  printf("Runf IFucntion at t = %f \n", t);
+  PetscCall(DMGlobalToLocalBegin(dm, X, INSERT_VALUES, app->localX));
+  PetscCall(DMGlobalToLocalEnd(dm, X, INSERT_VALUES, app->localX));
+
+  RDyMesh  *mesh  = &app->mesh;
+  RDyCells *cells = &mesh->cells;
+  RDyEdges *edges = &mesh->edges;
+
+  // Get pointers to vector data
+  PetscScalar *x_ptr, *udot_ptr, *f_ptr, *b_ptr;
+  PetscCall(VecGetArray(app->localX,    &x_ptr));
+  PetscCall(VecGetArray(Udot, &udot_ptr));
+  PetscCall(VecGetArray(F,              &f_ptr));
+  PetscCall(VecGetArray(app->localB,    &b_ptr));
+
+  PetscInt  ndof = app->ndof;
+  PetscInt  num = mesh->num_cells;
+  PetscReal h_vec[num], hu_vec[num], hv_vec[num], u_vec[num], v_vec[num];
+  // Collect the h/hu/hv for cells to compute u/v
+  for (PetscInt icell = 0; icell < mesh->num_cells; icell++) {
+    h_vec[icell]  = x_ptr[icell * ndof + 0];
+    hu_vec[icell] = x_ptr[icell * ndof + 1];
+    hv_vec[icell] = x_ptr[icell * ndof + 2];
+  }
+
+  PetscInt high, low;
+  PetscCall(VecGetOwnershipRange(F, &low, &high));
+  for (PetscInt icell = 0; icell < mesh->num_cells; icell++) {
+    if (cells->is_local[icell]) {
+      PetscReal h  = h_vec[icell];
+      PetscReal hu = hu_vec[icell];
+      PetscReal hv = hv_vec[icell];
+
+      PetscReal u = u_vec[icell];
+      PetscReal v = v_vec[icell];
+
+      PetscReal tbx = 0.0, tby = 0.0;
+
+      if (h >= app->tiny_h) {
+        // Cd = g n^2 h^{-1/3}, where n is Manning's coefficient
+        tbx = GRAVITY * Square(app->mannings_n) * PetscPowReal(h, -7.0 / 3.0) * hu * PetscSqrtReal(Square(hu) + Square(hv));
+        tby = GRAVITY * Square(app->mannings_n) * PetscPowReal(h, -7.0 / 3.0) * hv * PetscSqrtReal(Square(hu) + Square(hv));
+      }
+
+      f_ptr[icell * ndof + 0] = udot_ptr[icell * ndof + 0];
+      f_ptr[icell * ndof + 1] = udot_ptr[icell * ndof + 1] + tbx;
+      f_ptr[icell * ndof + 2] = udot_ptr[icell * ndof + 2] + tby;
+    }
+  }
+
+  // Restore vectors
+  PetscCall(VecRestoreArray(app->localX,    &x_ptr));
+  PetscCall(VecRestoreArray(Udot,           &udot_ptr));
+  PetscCall(VecRestoreArray(F,              &f_ptr));
+  PetscCall(VecRestoreArray(app->localB,    &b_ptr));
+
+  PetscFunctionReturn(0);
+}
+
+/// @brief IJacobian - Compute IJacobian = dF/dU + a dF/dUdot
+/// @param [in] ts A TS struct
+/// @param [in] t Time
+/// @param [in] X A global solution Vec
+/// @param [inout] F A global flux Vec
+/// @param [in] a
+/// @param [inout] J Jacobian Matrix
+/// @param [inout] Jpre preconditioned Jacobian Matrix
+/// @param [inout] ptr A user-defined pointer
+/// @return 0 on success, or a non-zero error code on failure
+PetscErrorCode IJacobian(TS ts, PetscReal t, Vec X, Vec Udot, PetscReal a, Mat J, Mat Jpre, void *ptr) {
+  PetscFunctionBeginUser;
+
+  RDyApp app = ptr;
+
+  RDyMesh  *mesh  = &app->mesh;
+  RDyCells *cells = &mesh->cells;
+
+  PetscInt rstart, rend;
+  PetscCall(MatGetOwnershipRange(J, &rstart, &rend));
+  PetscInt rank;
+  MPI_Comm_rank(app->comm, &rank);
+  printf("At rank = %d: rstart = %d, rend = %d \n",rank,rstart, rend);
+
+  PetscCall(DMGlobalToLocalBegin(app->dm, X, INSERT_VALUES, app->localX));
+  PetscCall(DMGlobalToLocalEnd(app->dm, X, INSERT_VALUES, app->localX));
+  PetscScalar *x_ptr;
+  PetscCall(VecGetArray(app->localX, &x_ptr));
+
+  PetscInt ndof = app->ndof;
+
+  PetscInt  num = mesh->num_cells;
+  PetscReal h, hu, hv;
+  PetscScalar vals[1], vals3[3];
+  PetscInt  row, col[1], col3[3];
+
+  PetscCall(MatZeroEntries(Jpre));
+  // Collect the h/hu/hv for cells to compute u/v
+  for (PetscInt icell = 0; icell < mesh->num_cells; icell++) {
+
+    if (cells->is_local[icell]) {
+      h  = x_ptr[icell * ndof + 0];
+      hu = x_ptr[icell * ndof + 1];
+      hv = x_ptr[icell * ndof + 2];
+
+      PetscReal c0 = -7.0 / 3.0 * GRAVITY * Square(app->mannings_n) * PetscPowReal(h, -10.0 / 3.0);
+      //PetscReal c0 = -1.0 / 3.0 * GRAVITY * Square(app->mannings_n) * PetscPowReal(h, -4.0 / 3.0);
+      PetscReal c1 = GRAVITY * Square(app->mannings_n) * PetscPowReal(h, -7.0 / 3.0);
+
+      row      = icell*ndof + 0 + rstart;
+      col[0]   = icell*ndof + 0 + rstart;
+      vals[0]  = a; 
+      PetscCall(MatSetValues(Jpre, 1, &row, 1, col, vals, INSERT_VALUES));
+
+      row      = icell*ndof + 1 + rstart;
+      col3[0]  = icell*ndof + 1 + rstart - 1;
+      col3[1]  = icell*ndof + 1 + rstart;
+      col3[2]  = icell*ndof + 1 + rstart + 1;
+
+      vals3[0] = c0*hu*PetscSqrtReal(hu*hu + hv*hv);
+      //vals3[0] = c0*u*PetscSqrtReal(u*u + v*v);
+      vals3[1] = c1*(2*hu*hu + hv*hv)/PetscSqrtReal(hu*hu + hv*hv) + a;
+      vals3[2] = c1*hu*hv/PetscSqrtReal(hu*hu + hv*hv);
+
+      PetscCall(MatSetValues(Jpre, 1, &row, 3, col3, vals3, INSERT_VALUES));
+
+      row      = icell*ndof + 2 + rstart;
+      col3[0]  = icell*ndof + 2 + rstart-2;
+      col3[1]  = icell*ndof + 2 + rstart-1;
+      col3[2]  = icell*ndof + 2 + rstart;
+
+      vals3[0] = c0*hv*PetscSqrtReal(hu*hu + hv*hv);
+      //vals3[0] = c0*v*PetscSqrtReal(u*u + v*v);
+      vals3[1] = c1*hu*hv/PetscSqrtReal(hu*hu + hv*hv);
+      vals3[2] = c1*(2*hv*hv + hu*hu)/PetscSqrtReal(hu*hu + hv*hv) + a;
+
+      PetscCall(MatSetValues(Jpre, 1, &row, 3, col3, vals3, INSERT_VALUES));
+
+    }
+  }
+
+  PetscCall(MatAssemblyBegin(Jpre, MAT_FINAL_ASSEMBLY));
+  PetscCall(MatAssemblyEnd(Jpre, MAT_FINAL_ASSEMBLY));
+  if (J != Jpre) {
+    PetscCall(MatAssemblyBegin(J, MAT_FINAL_ASSEMBLY));
+    PetscCall(MatAssemblyEnd(J, MAT_FINAL_ASSEMBLY));
+  }
+
+  // Restore vectors
+  PetscCall(VecRestoreArray(app->localX, &x_ptr));
+
+  PetscFunctionReturn(0);
+}
 /// @brief It is the RHSFunction called by TS
 /// @param [in] ts A TS struct
 /// @param [in] t Time
@@ -2082,11 +2250,13 @@ int main(int argc, char **argv) {
   /* - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -  *
    *  Create vectors for solution and residual
    * - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -  */
-  Vec X, R;
+  Vec X, R, R2;
   PetscCall(DMCreateGlobalVector(app->dm, &X));  // size = dof * number of cells
   PetscCall(VecDuplicate(X, &R));
+  PetscCall(VecDuplicate(X, &R2));
   PetscCall(VecViewFromOptions(X, NULL, "-vec_view"));
-  PetscCall(DMCreateLocalVector(app->dm, &app->localX));  // size = dof * number of cells
+  PetscCall(DMCreateLocalVector(app->dm, &app->localX));     // size = dof * number of cells
+  PetscCall(DMCreateLocalVector(app->dm, &app->localUdot));  // size = dof * number of cells
   PetscCall(DMCreateGlobalVector(app->auxdm, &app->B));
   PetscCall(DMCreateLocalVector(app->auxdm, &app->localB));  // size = dof * number of cells
 
@@ -2127,7 +2297,6 @@ int main(int argc, char **argv) {
   /* - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -  *
    *  Add buildings
    * - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -  */
-  PetscPrintf(PETSC_COMM_WORLD, "4. AddDams\n");
   if (app->add_building) {
     PetscCall(AddBuildings(app));
   }
@@ -2139,18 +2308,38 @@ int main(int argc, char **argv) {
   /* - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -  *
    *  Create timestepping solver context
    * - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -  */
-  PetscPrintf(PETSC_COMM_WORLD, "5. SetupTS\n");
   PetscReal max_time = app->Nt * app->dt;
   TS        ts;
   PetscCall(TSCreate(app->comm, &ts));
   PetscCall(TSSetProblemType(ts, TS_NONLINEAR));
-  PetscCall(TSSetType(ts, TSEULER));
-  PetscCall(TSSetDM(ts, app->dm));
+  PetscCall(TSSetType(ts, TSCN)); /* TSCN is better than backward Euler */
+  //PetscCall(TSThetaSetTheta(ts, 1.0)); /* Make the Theta method behave like backward Euler */
   PetscCall(TSSetRHSFunction(ts, R, RHSFunction, app));
+
+  PetscCall(TSSetIFunction(ts,R2, IFunction, app));
+  PetscCall(DMSetMatType(app->dm,MATAIJ));
+  Mat J;
+  PetscCall(DMCreateMatrix(app->dm,&J));
+
+  PetscCall(TSSetDM(ts, app->dm));
+
   PetscCall(TSSetMaxTime(ts, max_time));
   PetscCall(TSSetExactFinalTime(ts, TS_EXACTFINALTIME_STEPOVER));
   PetscCall(TSSetSolution(ts, X));
   PetscCall(TSSetTimeStep(ts, app->dt));
+
+
+  if (app->jacobian_analytic) {
+    printf("Using analytical IJacobian fucntion!\n");
+    PetscCall(TSSetIJacobian(ts, J, J, IJacobian, app));
+  }
+  else {
+    printf("Using PETSC Jacobian fd coloring!\n");
+    SNES snes;
+    PetscCall(TSGetSNES(ts,&snes));
+    PetscCall(SNESSetJacobian(snes, J, J, SNESComputeJacobianDefaultColor, 0));
+    PetscCall(TSSetMaxSNESFailures(ts,-1));
+  }
 
   PetscCall(TSSetFromOptions(ts));
   PetscCall(TSSolve(ts, X));
@@ -2176,6 +2365,7 @@ int main(int argc, char **argv) {
   PetscCall(VecDestroy(&app->B));
   PetscCall(VecDestroy(&app->localB));
   PetscCall(VecDestroy(&app->localX));
+  PetscCall(VecDestroy(&app->localUdot));
   PetscCall(VecDestroy(&R));
   PetscCall(RDyMeshDestroy(app->mesh));
   PetscCall(DMDestroy(&app->auxdm));
