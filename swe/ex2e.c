@@ -2028,7 +2028,6 @@ PetscErrorCode IFunction(TS ts, PetscReal t, Vec X, Vec Udot, Vec F, void *ptr) 
   RDyApp app = ptr;
   DM     dm  = app->dm;
 
-  printf("Runf IFucntion at t = %f \n", t);
   PetscCall(DMGlobalToLocalBegin(dm, X, INSERT_VALUES, app->localX));
   PetscCall(DMGlobalToLocalEnd(dm, X, INSERT_VALUES, app->localX));
 
