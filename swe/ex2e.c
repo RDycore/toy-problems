@@ -2145,10 +2145,16 @@ PetscErrorCode IJacobian(TS ts, PetscReal t, Vec X, Vec Udot, PetscReal a, Mat J
       col3[1]  = icell*ndof + 1 + rstart;
       col3[2]  = icell*ndof + 1 + rstart + 1;
 
-      vals3[0] = c0*hu*PetscSqrtReal(hu*hu + hv*hv);
-      //vals3[0] = c0*u*PetscSqrtReal(u*u + v*v);
-      vals3[1] = c1*(2*hu*hu + hv*hv)/PetscSqrtReal(hu*hu + hv*hv) + a;
-      vals3[2] = c1*hu*hv/PetscSqrtReal(hu*hu + hv*hv);
+      PetscReal tiny_velocity = 1e-8;
+      PetscReal velocity = PetscSqrtReal(hu*hu + hv*hv);
+      vals3[0] = c0*hu*velocity;
+      if (velocity > tiny_velocity) {
+        vals3[1] = c1*(2*hu*hu + hv*hv)/velocity + a;
+        vals3[2] = c1*hu*hv/velocity;
+      } else {
+        vals3[1] = a;
+        vals3[2] = 0.0;
+      }
 
       PetscCall(MatSetValues(Jpre, 1, &row, 3, col3, vals3, INSERT_VALUES));
 
@@ -2157,10 +2163,14 @@ PetscErrorCode IJacobian(TS ts, PetscReal t, Vec X, Vec Udot, PetscReal a, Mat J
       col3[1]  = icell*ndof + 2 + rstart-1;
       col3[2]  = icell*ndof + 2 + rstart;
 
-      vals3[0] = c0*hv*PetscSqrtReal(hu*hu + hv*hv);
-      //vals3[0] = c0*v*PetscSqrtReal(u*u + v*v);
-      vals3[1] = c1*hu*hv/PetscSqrtReal(hu*hu + hv*hv);
-      vals3[2] = c1*(2*hv*hv + hu*hu)/PetscSqrtReal(hu*hu + hv*hv) + a;
+      vals3[0] = c0*hv*velocity;
+      if (velocity > tiny_velocity) {
+        vals3[1] = c1*hu*hv/velocity;
+        vals3[2] = c1*(2*hv*hv + hu*hu)/velocity + a;
+      } else {
+        vals3[1] = 0.0;
+        vals3[2] = a;
+      }
 
       PetscCall(MatSetValues(Jpre, 1, &row, 3, col3, vals3, INSERT_VALUES));
 
