@@ -1324,8 +1324,7 @@ PetscErrorCode computeSEDbss(RDySed *sed, PetscInt icell, PetscReal Cd, PetscRea
   PetscFunctionBeginUser;
 
   PetscReal rhow     = 1000.0;  /// water density
-  PetscReal velocity = PetscSqrtReal(u * u + v * v);
-  sed->tau_b[icell]  = rhow * Cd * u * velocity;
+  sed->tau_b[icell]  = 0.5 * rhow * Cd * (u * u + v * v);
 
   PetscFunctionReturn(0);
 }
@@ -2716,7 +2715,7 @@ PetscErrorCode AddSourceTerm(RDyApp app, Vec F, PetscReal t) {
         tby_MMS = Cd_MMS * v_MMS * velocity_MMS;
 
         // MMS deposition and erosion
-        PetscReal tau_b_MMS = rhow * Cd_MMS * u_MMS * velocity_MMS;
+        PetscReal tau_b_MMS = 0.5 * rhow * Cd_MMS * (u_MMS * u_MMS + v_MMS * v_MMS);
         for (PetscInt j = 0; j < nsed; j++) {
           f_ptr[icell * ndof + 3 + j] -= sed->M[j] * (tau_b_MMS - sed->tau_ce[j]) / sed->tau_ce[j];  // Ei
           f_ptr[icell * ndof + 3 + j] += sed->vset[j] * C_MMS * (1 - tau_b_MMS / sed->tau_cd[j]);    // Di
