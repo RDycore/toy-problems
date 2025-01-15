@@ -180,7 +180,7 @@ E_i = M \left( \frac{\tau_b - \tau_{ce}}{\tau_{ce}} \right),
 D_i = w c_i \left[ 1 - \left( \frac{\tau_b}{\tau_{cd}} \right) \right],
 \end{equation}
 
-where, for each sediment class $i$, $M$ is the Krone-Partheniades erosion law constant [kg/m$^{2}$], or the erodibility coefficient, $w$ is the settling velocity for sediment class $i$ (m/s), $\tau_{ce}$ is critical shear stress for erosion (N/m$^2$), $\tau_{cd}$ is critical shear stress for deposition (N/m$^2$), $\tau_b = \rho C_D u\sqrt{u^2+v^2}$ is the bottom shear stress. 
+where, for each sediment class $i$, $M$ is the Krone-Partheniades erosion law constant [kg/m$^{2}$], or the erodibility coefficient, $w$ is the settling velocity for sediment class $i$ (m/s), $\tau_{ce}$ is critical shear stress for erosion (N/m$^2$), $\tau_{cd}$ is critical shear stress for deposition (N/m$^2$), $\tau_b = 0.5 \rho C_D (u^2+v^2)$ is the bottom shear stress. 
 
 Coupling sediment transport equation with Shallow Water Equations lead to:
 
